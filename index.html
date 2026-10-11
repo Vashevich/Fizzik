@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>Архифизика</title>
+<title>VR Физик</title>
 <meta name="description" content="Физическая песочница в смешанной реальности для Meta Quest 3: кубики и шарики падают на твой настоящий стол, стул и пол.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -64,7 +64,7 @@ button[aria-pressed="true"]{background:#2b3646;border-color:#5b6f88}
 .help dt{font:500 11.5px var(--f-mono);color:var(--accent-ink);background:var(--accent);border-radius:5px;padding:3px 6px;justify-self:start;align-self:start;white-space:nowrap}
 .help dd{margin:0;color:var(--text);min-width:0}
 .help p{margin:10px 0 0;color:var(--muted);font-size:12.5px}
-.hint{position:fixed;z-index:1;left:50%;transform:translateX(-50%);top:calc(110px + env(safe-area-inset-top,0px));font-size:12.5px;color:var(--muted);background:var(--panel);border:1px solid var(--line);border-radius:999px;padding:6px 12px;white-space:nowrap;pointer-events:none}
+.hint{position:fixed;z-index:1;left:50%;transform:translateX(-50%);bottom:calc(72px + env(safe-area-inset-bottom,0px));font-size:12.5px;color:var(--muted);background:var(--panel);border:1px solid var(--line);border-radius:999px;padding:6px 12px;white-space:nowrap;pointer-events:none}
 @media (max-width:760px){
   .help{bottom:auto;top:calc(150px + env(safe-area-inset-top,0px))}
   .help:not([open]){width:auto}
@@ -87,8 +87,8 @@ button[aria-pressed="true"]{background:#2b3646;border-color:#5b6f88}
 
 <div class="ui top">
   <div class="brand">
-    <h1><span>Архифизика</span><i></i><i></i></h1>
-    <p>Кубики и шарики с настоящей физикой: падают на твой пол, стол и стул в Quest 3. Сергей Дмитриев · Rock Parametric</p>
+    <h1><span>VR Физик</span><i></i><i></i></h1>
+    <p>Кубики и шарики с настоящей физикой: хватай, бросай, ставь на свой стол и стул в Quest 3. Сергей Дмитриев · Rock Parametric</p>
   </div>
   <div class="enter">
     <button id="enter" disabled>Проверяю шлем…</button>
@@ -96,7 +96,7 @@ button[aria-pressed="true"]{background:#2b3646;border-color:#5b6f88}
   </div>
 </div>
 
-<p class="hint">Клик — бросить фигуру · тянуть — вращать вид · колесо — приблизить</p>
+<p class="hint">Тяни фигуру мышью и отпускай — бросок · клик в пустоту — новая фигура · тяни фон — вращать вид</p>
 
 <div class="ui tools" role="toolbar" aria-label="Инструменты">
   <div class="seg">
@@ -112,8 +112,9 @@ button[aria-pressed="true"]{background:#2b3646;border-color:#5b6f88}
 <details class="ui help" id="help" open>
   <summary>Управление в шлеме</summary>
   <dl>
-    <dt>Курок</dt><dd>Создать фигуру в руке. Отпустить с замахом — бросить</dd>
+    <dt>Курок</dt><dd>Навёл луч на фигуру — схватить, в пустоту — создать новую. Отпустить с замахом — бросить</dd>
     <dt>Grip</dt><dd>Схватить фигуру рядом или лучом издалека</dd>
+    <dt>Граница</dt><dd>Фигуры не улетают дальше 10 м от центра: отскакивают от невидимой стены</dd>
     <dt>A</dt><dd>Кубик ↔ шарик</dd>
     <dt>B</dt><dd>Гравитация вкл / выкл</dd>
     <dt>X</dt><dd>Показать / скрыть скан комнаты</dd>
@@ -213,6 +214,14 @@ const xrFloorCatcher = new THREE.Mesh(new THREE.CircleGeometry(4, 48).rotateX(-M
 xrFloorCatcher.receiveShadow = true;
 xrFloorCatcher.visible = false;
 scene.add(xrFloorCatcher);
+
+// play-area boundary: objects bounce back at 10 m from the scene centre
+const BOUND_R = 10, BOUND_TOP = 6;
+const boundary = new THREE.LineLoop(
+  new THREE.BufferGeometry().setFromPoints(Array.from({ length: 128 }, (_, i) => new THREE.Vector3(Math.cos(i / 128 * Math.PI * 2) * BOUND_R, 0.01, Math.sin(i / 128 * Math.PI * 2) * BOUND_R))),
+  new THREE.LineDashedMaterial({ color: '#f2b632', dashSize: 0.3, gapSize: 0.2, transparent: true, opacity: 0.6 }));
+boundary.computeLineDistances();
+scene.add(boundary);
 
 /* ---------- text sprites ---------- */
 function textSprite(text, color) {
@@ -414,6 +423,7 @@ function toggleGravity() {
 function toggleScan() {
   state.showScan = !state.showScan;
   for (const s of surfaces.values()) s.scan.visible = state.showScan;
+  boundary.visible = state.showScan;
   $('scan').setAttribute('aria-pressed', state.showScan);
   panelDirty = true;
 }
@@ -440,8 +450,49 @@ addEventListener('keydown', e => {
 /* ---------- desktop: click to throw ---------- */
 const raycaster = new THREE.Raycaster();
 let downXY = null;
-renderer.domElement.addEventListener('pointerdown', e => { ensureAudio(); downXY = [e.clientX, e.clientY]; });
-renderer.domElement.addEventListener('pointerup', e => {
+const deskHand = { held: null, by: null, offset: new THREE.Matrix4(), samples: [], tp: new THREE.Vector3(), tq: new THREE.Quaternion(), dist: 1, ndc: new THREE.Vector2(), grabOff: new THREE.Vector3() };
+const ndcOf = e => new THREE.Vector2(e.clientX / innerWidth * 2 - 1, -(e.clientY / innerHeight) * 2 + 1);
+function pickObject(ndc) {
+  raycaster.setFromCamera(ndc, camera); raycaster.far = Infinity;
+  const hits = raycaster.intersectObjects(objects.filter(o => !o.held).map(o => o.mesh), false);
+  return hits.length ? { obj: objects.find(o => o.mesh === hits[0].object), hit: hits[0] } : null;
+}
+const cvs = renderer.domElement;
+cvs.addEventListener('pointerdown', e => {
+  ensureAudio(); downXY = [e.clientX, e.clientY];
+  if (state.xr || e.button !== 0 || deskHand.held) return;
+  const p = pickObject(ndcOf(e));
+  if (!p) return;
+  controls.enabled = false;           // runs before OrbitControls, so the view does not rotate
+  downXY = null;
+  deskHand.dist = p.hit.distance; deskHand.ndc.copy(ndcOf(e));
+  deskHand.grabOff.copy(p.obj.mesh.position).sub(p.hit.point);
+  deskHand.tq.copy(p.obj.mesh.quaternion); deskHand.tp.copy(p.obj.mesh.position);
+  grab(deskHand, p.obj, new THREE.Matrix4(), 'mouse');
+  try { cvs.setPointerCapture(e.pointerId); } catch {}
+  cvs.style.cursor = 'grabbing';
+}, { capture: true });
+cvs.addEventListener('pointermove', e => {
+  if (state.xr) return;
+  if (deskHand.held) { deskHand.ndc.copy(ndcOf(e)); return; }
+  if (e.buttons === 0) cvs.style.cursor = pickObject(ndcOf(e)) ? 'grab' : '';
+});
+cvs.addEventListener('wheel', e => {
+  if (!deskHand.held) return;
+  e.preventDefault(); e.stopImmediatePropagation();
+  deskHand.dist = THREE.MathUtils.clamp(deskHand.dist * (e.deltaY > 0 ? 0.92 : 1.08), 0.3, 9);
+}, { capture: true, passive: false });
+function deskRelease() {
+  if (!deskHand.held) return;
+  const o = deskHand.held;
+  release(deskHand);
+  const v = o.body.velocity; const sp = Math.hypot(v.x, v.y, v.z);
+  if (sp > 14) v.scale(14 / sp, v);
+  controls.enabled = true; cvs.style.cursor = 'grab';
+}
+cvs.addEventListener('pointercancel', deskRelease);
+cvs.addEventListener('pointerup', e => {
+  if (deskHand.held) { deskRelease(); return; }
   if (!downXY || state.xr || e.button !== 0) return;
   const moved = Math.hypot(e.clientX - downXY[0], e.clientY - downXY[1]); downXY = null;
   if (moved > 6) return;
@@ -479,7 +530,7 @@ function drawPanel(noRoom) {
   const x = panelCanvas.getContext('2d');
   x.clearRect(0, 0, 640, 440);
   x.fillStyle = 'rgba(22,27,36,0.92)'; x.beginPath(); x.roundRect(0, 0, 640, 440, 36); x.fill();
-  x.fillStyle = '#eef2f7'; x.font = '700 40px Unbounded, "Golos Text", sans-serif'; x.fillText('Архифизика', 32, 66);
+  x.fillStyle = '#eef2f7'; x.font = '700 40px Unbounded, "Golos Text", sans-serif'; x.fillText('VR Физик', 32, 66);
   x.font = '600 30px "Golos Text", system-ui, sans-serif';
   const row = (y, k, v, c) => { x.fillStyle = '#9aa8b8'; x.fillText(k, 32, y); x.fillStyle = c || '#eef2f7'; x.fillText(v, 250, y); };
   row(124, 'Форма', state.shape === 'cube' ? '■ кубик' : '● шарик', state.shape === 'cube' ? '#e5483b' : '#5b9cf0');
@@ -615,16 +666,15 @@ function press(src, kind, frame) {
     pulse(src, 0.35, 25); return;
   }
   const inFront = sz => new THREE.Matrix4().makeTranslation(0, src.hand ? 0 : -0.01, src.hand ? 0 : -(0.05 + sz / 2));
-  if (kind === 'squeeze') {
-    const hit = rayHit(h);
-    if (hit) {
-      const off = inFront(hit.obj.size);
-      const rel = new THREE.Matrix4().makeRotationFromQuaternion(_q.clone().invert().multiply(hit.obj.mesh.quaternion));
-      grab(h, hit.obj, off.multiply(rel), kind); pulse(src, 0.5, 40);
-    }
+  const hit = rayHit(h);
+  if (hit) {
+    const off = inFront(hit.obj.size);
+    const rel = new THREE.Matrix4().makeRotationFromQuaternion(_q.clone().invert().multiply(hit.obj.mesh.quaternion));
+    grab(h, hit.obj, off.multiply(rel), kind); pulse(src, 0.5, 40);
     return;
   }
-  // select with nothing near: create a new shape in the hand
+  if (kind === 'squeeze') return;
+  // trigger with nothing near or under the ray: create a new shape in the hand
   const shape = src.hand ? (handSpawnToggle = !handSpawnToggle) ? 'cube' : 'sphere' : state.shape;
   const o = spawn(shape, _p, _q);
   grab(h, o, inFront(o.size), kind);
@@ -700,7 +750,7 @@ async function checkXR() {
   else {
     enterBtn.textContent = 'Шлем не найден';
     note.hidden = false;
-    note.textContent = 'Открой эту страницу в браузере Meta Quest 3. Здесь работает превью: кликай, чтобы бросать фигуры.';
+    note.textContent = 'Открой эту страницу в браузере Meta Quest 3. Здесь работает превью: хватай фигуры мышью и бросай.';
   }
 }
 checkXR();
@@ -803,14 +853,33 @@ renderer.setAnimationLoop((t, frame) => {
     if (panelDirty && panel.visible) drawPanel(noRoom);
   } else {
     controls.update();
+    if (deskHand.held) {
+      raycaster.setFromCamera(deskHand.ndc, camera);
+      deskHand.tp.copy(raycaster.ray.origin).addScaledVector(raycaster.ray.direction, deskHand.dist).add(deskHand.grabOff);
+      deskHand.tp.y = Math.max(deskHand.tp.y, deskHand.held.size / 2);
+      deskHand.samples.push({ t, p: deskHand.tp.clone(), q: deskHand.tq.clone() }); if (deskHand.samples.length > 12) deskHand.samples.shift();
+      const b = deskHand.held.body; b.position.set(deskHand.tp.x, deskHand.tp.y, deskHand.tp.z);
+      const { v } = estimate(deskHand); b.velocity.set(v.x, v.y, v.z); b.angularVelocity.setZero();
+    }
   }
 
   world.step(1 / 120, dt, 8);
 
   // keep held objects exactly in hand after the step
+  if (deskHand.held) { const b = deskHand.held.body; b.position.set(deskHand.tp.x, deskHand.tp.y, deskHand.tp.z); b.quaternion.set(deskHand.tq.x, deskHand.tq.y, deskHand.tq.z, deskHand.tq.w); }
   for (const h of hands.values()) if (h.held) { const b = h.held.body; b.position.set(h.tp.x, h.tp.y, h.tp.z); b.quaternion.set(h.tq.x, h.tq.y, h.tq.z, h.tq.w); }
 
   for (const o of [...objects]) {
+    if (!o.held) {
+      const p = o.body.position, v = o.body.velocity, r = Math.hypot(p.x, p.z);
+      if (r > BOUND_R) {
+        const nx = p.x / r, nz = p.z / r;
+        p.x = nx * BOUND_R; p.z = nz * BOUND_R;
+        const vn = v.x * nx + v.z * nz;
+        if (vn > 0) { v.x -= 1.5 * vn * nx; v.z -= 1.5 * vn * nz; }
+      }
+      if (p.y > BOUND_TOP) { p.y = BOUND_TOP; if (v.y > 0) v.y *= -0.5; }
+    }
     o.mesh.position.copy(o.body.position);
     o.mesh.quaternion.copy(o.body.quaternion);
     if (o.body.position.y < -5 && !o.held) { removeObj(o); updateCount(); }
