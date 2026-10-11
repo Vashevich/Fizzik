@@ -1,0 +1,832 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Архифизика</title>
+<meta name="description" content="Физическая песочница в смешанной реальности для Meta Quest 3: кубики и шарики падают на твой настоящий стол, стул и пол.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Unbounded:wght@500;700&family=Golos+Text:wght@400;500;600&family=JetBrains+Mono:wght@500&display=swap">
+<style>
+/* Layout: full-bleed 3D stage, floating instrument panels pinned to the corners. Deliberate single dark look. */
+:root{
+  --bg:#1b2029;
+  --panel:rgba(22,27,36,.86);
+  --line:#344152;
+  --text:#eef2f7;
+  --muted:#9aa8b8;
+  --accent:#f2b632;
+  --accent-ink:#1b2029;
+  --cube:#e5483b;
+  --ball:#2f74d0;
+  --f-display:"Unbounded","Golos Text",system-ui,sans-serif;
+  --f-body:"Golos Text",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --f-mono:"JetBrains Mono",ui-monospace,Menlo,Consolas,monospace;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0}
+body{background:var(--bg);color:var(--text);font:15px/1.45 var(--f-body);overflow:hidden;-webkit-font-smoothing:antialiased}
+#stage{position:fixed;inset:0}
+#stage canvas{display:block;width:100%;height:100%;touch-action:none}
+.ui{position:fixed;z-index:2;display:flex;flex-direction:column;gap:10px}
+.top{top:calc(16px + env(safe-area-inset-top,0px));left:16px;right:16px;flex-direction:row;flex-wrap:wrap;align-items:flex-start;justify-content:space-between;pointer-events:none}
+.top>*{pointer-events:auto}
+.brand{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:12px 16px;backdrop-filter:blur(10px);max-width:440px;min-width:0}
+.brand h1{font:700 22px/1.1 var(--f-display);letter-spacing:.01em;margin:0;display:flex;align-items:center;gap:10px}
+.brand h1 i{display:inline-block;width:14px;height:14px;background:var(--cube);border-radius:3px;transform:rotate(12deg)}
+.brand h1 i+i{background:var(--ball);border-radius:50%;transform:none;margin-left:-6px}
+.brand p{margin:6px 0 0;color:var(--muted);font-size:13.5px}
+.enter{display:flex;flex-direction:column;align-items:flex-end;gap:6px;max-width:320px}
+button{font:600 14px/1 var(--f-body);color:var(--text);background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:10px 14px;cursor:pointer;backdrop-filter:blur(10px);transition:background .15s,border-color .15s}
+button:hover{border-color:#566a82}
+button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+button[aria-pressed="true"]{background:#2b3646;border-color:#5b6f88}
+#enter{background:var(--accent);color:var(--accent-ink);border-color:var(--accent);font:700 15px/1 var(--f-display);padding:14px 18px;border-radius:12px}
+#enter:disabled{background:var(--panel);color:var(--muted);border-color:var(--line);cursor:default;font-family:var(--f-body);font-weight:600}
+.enter small{color:var(--muted);font-size:12.5px;text-align:right;background:var(--panel);padding:6px 10px;border-radius:8px;border:1px solid var(--line)}
+.enter small[hidden]{display:none}
+.tools{left:16px;bottom:calc(16px + env(safe-area-inset-bottom,0px));flex-direction:row;flex-wrap:wrap;align-items:center;max-width:calc(100% - 32px)}
+.seg{display:flex}
+.seg button{border-radius:0}
+.seg button:first-child{border-radius:10px 0 0 10px}
+.seg button:last-child{border-radius:0 10px 10px 0;border-left:0}
+.sw{display:inline-block;width:10px;height:10px;margin-right:7px;vertical-align:-1px;background:var(--cube);border-radius:2px}
+.sw.b{background:var(--ball);border-radius:50%}
+.unit{font-family:var(--f-mono);font-size:12.5px;font-weight:500;color:var(--accent);margin-left:6px}
+.count{font:500 12.5px var(--f-mono);color:var(--muted);padding:0 4px;font-variant-numeric:tabular-nums}
+.help{right:16px;bottom:calc(16px + env(safe-area-inset-bottom,0px));width:330px;max-width:calc(100% - 32px);background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:12px 14px;backdrop-filter:blur(10px)}
+.help summary{cursor:pointer;font:700 13px var(--f-display);letter-spacing:.02em;list-style:none;display:flex;justify-content:space-between}
+.help summary::after{content:"+";color:var(--muted)}
+.help[open] summary::after{content:"–"}
+.help dl{display:grid;grid-template-columns:auto 1fr;gap:7px 12px;margin:12px 0 4px;font-size:13px}
+.help dt{font:500 11.5px var(--f-mono);color:var(--accent-ink);background:var(--accent);border-radius:5px;padding:3px 6px;justify-self:start;align-self:start;white-space:nowrap}
+.help dd{margin:0;color:var(--text);min-width:0}
+.help p{margin:10px 0 0;color:var(--muted);font-size:12.5px}
+.hint{position:fixed;z-index:1;left:50%;transform:translateX(-50%);top:calc(110px + env(safe-area-inset-top,0px));font-size:12.5px;color:var(--muted);background:var(--panel);border:1px solid var(--line);border-radius:999px;padding:6px 12px;white-space:nowrap;pointer-events:none}
+@media (max-width:760px){
+  .help{bottom:auto;top:calc(150px + env(safe-area-inset-top,0px))}
+  .help:not([open]){width:auto}
+  .hint{display:none}
+  .enter{align-items:stretch;max-width:none;width:100%}
+  .enter small{text-align:left}
+}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+<script type="importmap">
+{"imports":{
+  "three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+  "three/addons/":"https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/",
+  "cannon-es":"https://cdn.jsdelivr.net/npm/cannon-es@0.20.0/dist/cannon-es.js"
+}}
+</script>
+</head>
+<body>
+<div id="stage"></div>
+
+<div class="ui top">
+  <div class="brand">
+    <h1><span>Архифизика</span><i></i><i></i></h1>
+    <p>Кубики и шарики с настоящей физикой: падают на твой пол, стол и стул в Quest 3. Сергей Дмитриев · Rock Parametric</p>
+  </div>
+  <div class="enter">
+    <button id="enter" disabled>Проверяю шлем…</button>
+    <small id="enterNote" hidden></small>
+  </div>
+</div>
+
+<p class="hint">Клик — бросить фигуру · тянуть — вращать вид · колесо — приблизить</p>
+
+<div class="ui tools" role="toolbar" aria-label="Инструменты">
+  <div class="seg">
+    <button id="shapeCube" aria-pressed="true"><span class="sw"></span>Кубик</button>
+    <button id="shapeBall" aria-pressed="false"><span class="sw b"></span>Шарик</button>
+  </div>
+  <button id="grav" aria-pressed="true">Гравитация<span class="unit" id="gval">9,81 м/с²</span></button>
+  <button id="scan" aria-pressed="true">Скан комнаты</button>
+  <button id="clear">Очистить</button>
+  <span class="count" id="count">0 фигур</span>
+</div>
+
+<details class="ui help" id="help" open>
+  <summary>Управление в шлеме</summary>
+  <dl>
+    <dt>Курок</dt><dd>Создать фигуру в руке. Отпустить с замахом — бросить</dd>
+    <dt>Grip</dt><dd>Схватить фигуру рядом или лучом издалека</dd>
+    <dt>A</dt><dd>Кубик ↔ шарик</dd>
+    <dt>B</dt><dd>Гравитация вкл / выкл</dd>
+    <dt>X</dt><dd>Показать / скрыть скан комнаты</dd>
+    <dt>Y</dt><dd>Убрать все фигуры</dd>
+    <dt>Лев. стик</dt><dd>Нажать — настроить пространство</dd>
+    <dt>Руки</dt><dd>Щипок создаёт или хватает, разжать — бросить</dd>
+  </dl>
+  <p>Стол, стул и диван берутся из настройки пространства Quest: Настройки → Физическое пространство → Настройка пространства. Отметь там мебель, и фигуры будут на неё ставиться.</p>
+</details>
+
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
+import * as CANNON from 'cannon-es';
+
+/* ---------- state ---------- */
+const G = -9.81;
+const state = { shape: 'cube', gravity: true, showScan: true, xr: false, roomHintAt: 0 };
+const PALETTE = ['#e5483b', '#f2b632', '#2f74d0', '#3aa66a', '#f07c2a', '#8d5bd6', '#eef0f3'];
+const LABELS = {
+  floor: ['пол', '#4fb7a8'], wall: ['стена', '#8a98ad'], ceiling: ['потолок', '#8a98ad'],
+  table: ['стол', '#f2b632'], desk: ['стол', '#f2b632'], chair: ['стул', '#f07c2a'], couch: ['диван', '#e5483b'],
+  bed: ['кровать', '#8d5bd6'], storage: ['шкаф', '#3aa66a'], shelf: ['полка', '#3aa66a'],
+  screen: ['экран', '#2f74d0'], lamp: ['лампа', '#f7d774'], plant: ['растение', '#3aa66a'],
+  door: ['дверь', '#b5c0cc'], 'door frame': ['дверь', '#b5c0cc'], window: ['окно', '#9fd3ff'],
+  'window frame': ['окно', '#9fd3ff'], 'wall art': ['картина', '#c79bd8'], other: ['объект', '#d6d9de']
+};
+const labelName = l => (LABELS[l] || LABELS.other)[0];
+const labelColor = l => (LABELS[l] || LABELS.other)[1];
+
+/* ---------- renderer / scene ---------- */
+const stage = document.getElementById('stage');
+const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.setSize(innerWidth, innerHeight);
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+renderer.xr.enabled = true;
+renderer.xr.setReferenceSpaceType('local-floor');
+stage.appendChild(renderer.domElement);
+
+const scene = new THREE.Scene();
+const DESK_BG = new THREE.Color('#1b2029');
+scene.background = DESK_BG;
+scene.fog = new THREE.Fog('#1b2029', 6, 14);
+
+const camera = new THREE.PerspectiveCamera(55, innerWidth / innerHeight, 0.01, 60);
+camera.position.set(2.1, 1.75, 2.4);
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.target.set(0.2, 0.6, -0.1);
+controls.enableDamping = true;
+controls.maxPolarAngle = Math.PI * 0.49;
+controls.minDistance = 0.6; controls.maxDistance = 7;
+controls.update();
+
+scene.add(new THREE.HemisphereLight(0xffffff, 0x3a4452, 1.25));
+const sun = new THREE.DirectionalLight(0xffffff, 1.7);
+sun.position.set(1.6, 4, 1.2);
+sun.castShadow = true;
+sun.shadow.mapSize.set(1024, 1024);
+Object.assign(sun.shadow.camera, { left: -3, right: 3, top: 3, bottom: -3, near: 0.5, far: 10 });
+sun.shadow.bias = -0.0006;
+sun.shadow.normalBias = 0.01;
+scene.add(sun, sun.target);
+
+/* ---------- physics ---------- */
+const world = new CANNON.World({ gravity: new CANNON.Vec3(0, G, 0) });
+world.allowSleep = true;
+world.broadphase = new CANNON.SAPBroadphase(world);
+world.solver.iterations = 12;
+const matObj = new CANNON.Material('obj');
+const matEnv = new CANNON.Material('env');
+world.addContactMaterial(new CANNON.ContactMaterial(matObj, matEnv, { friction: 0.5, restitution: 0.25 }));
+world.addContactMaterial(new CANNON.ContactMaterial(matObj, matObj, { friction: 0.45, restitution: 0.2 }));
+
+// safety net under everything, so nothing falls forever
+const ground = new CANNON.Body({ mass: 0, material: matEnv, shape: new CANNON.Plane() });
+ground.quaternion.setFromEuler(-Math.PI / 2, 0, 0);
+ground.position.set(0, -0.01, 0);
+world.addBody(ground);
+
+/* ---------- shared materials ---------- */
+const occluderMat = new THREE.MeshBasicMaterial({ colorWrite: false });
+const shadowMat = new THREE.ShadowMaterial({ opacity: 0.32, side: THREE.DoubleSide, depthWrite: false });
+const deskMats = {
+  floor: new THREE.MeshStandardMaterial({ color: '#2a323e', roughness: 0.95, side: THREE.DoubleSide }),
+  wall: new THREE.MeshStandardMaterial({ color: '#313a48', roughness: 1, side: THREE.DoubleSide }),
+  wood: new THREE.MeshStandardMaterial({ color: '#b48a5a', roughness: 0.7 }),
+  fabric: new THREE.MeshStandardMaterial({ color: '#5d6c80', roughness: 0.9 })
+};
+const deskMatFor = l => l === 'floor' ? deskMats.floor : (l === 'wall' || l === 'ceiling') ? deskMats.wall : l === 'couch' ? deskMats.fabric : deskMats.wood;
+
+// virtual floor shadow catcher for XR, used only until a real floor is detected
+const xrFloorCatcher = new THREE.Mesh(new THREE.CircleGeometry(4, 48).rotateX(-Math.PI / 2), shadowMat);
+xrFloorCatcher.receiveShadow = true;
+xrFloorCatcher.visible = false;
+scene.add(xrFloorCatcher);
+
+/* ---------- text sprites ---------- */
+function textSprite(text, color) {
+  const c = document.createElement('canvas'); c.width = 256; c.height = 72;
+  const x = c.getContext('2d');
+  x.font = '600 34px "Golos Text", system-ui, sans-serif';
+  const w = Math.min(240, x.measureText(text).width + 44);
+  x.fillStyle = 'rgba(20,24,31,0.82)';
+  x.beginPath(); x.roundRect((256 - w) / 2, 8, w, 56, 28); x.fill();
+  x.fillStyle = color; x.beginPath(); x.arc((256 - w) / 2 + 22, 36, 7, 0, 7); x.fill();
+  x.fillStyle = '#eef2f7'; x.textBaseline = 'middle'; x.fillText(text, (256 - w) / 2 + 36, 37);
+  const tex = new THREE.CanvasTexture(c); tex.colorSpace = THREE.SRGBColorSpace;
+  const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false }));
+  s.scale.set(0.2, 0.056, 1);
+  s.renderOrder = 5;
+  return s;
+}
+
+/* ---------- surfaces (detected or virtual) ---------- */
+const surfaces = new Map();
+const _p = new THREE.Vector3(), _q = new THREE.Quaternion(), _s = new THREE.Vector3();
+
+function addSurface(key, o) {
+  removeSurface(key);
+  o.matrix.decompose(_p, _q, _s);
+  const body = new CANNON.Body({ mass: 0, type: CANNON.Body.STATIC, material: matEnv });
+  body.addShape(new CANNON.Box(new CANNON.Vec3(o.half.x, o.half.y, o.half.z)), new CANNON.Vec3(o.center.x, o.center.y, o.center.z));
+  body.position.set(_p.x, _p.y, _p.z);
+  body.quaternion.set(_q.x, _q.y, _q.z, _q.w);
+  world.addBody(body);
+
+  const g = new THREE.Group(); g.matrixAutoUpdate = false; g.matrix.copy(o.matrix); scene.add(g);
+  const color = labelColor(o.label);
+  const boxGeo = () => new THREE.BoxGeometry(o.half.x * 2, o.half.y * 2, o.half.z * 2);
+  let shapeGeo = null;
+  if (o.polygon) {
+    const sh = new THREE.Shape(o.polygon.map(([x, z]) => new THREE.Vector2(x, -z)));
+    shapeGeo = new THREE.ShapeGeometry(sh); shapeGeo.rotateX(-Math.PI / 2);
+  }
+
+  if (o.virtual) {
+    const m = new THREE.Mesh(shapeGeo || boxGeo(), deskMatFor(o.label));
+    if (!shapeGeo) { m.position.copy(o.center); m.castShadow = true; }
+    m.receiveShadow = true; g.add(m);
+  } else {
+    const occ = new THREE.Mesh(boxGeo(), occluderMat); occ.position.copy(o.center); occ.renderOrder = -1; g.add(occ);
+    const rec = shapeGeo
+      ? new THREE.Mesh(shapeGeo.clone().translate(0, 0.002, 0), shadowMat)
+      : new THREE.Mesh(new THREE.BoxGeometry(o.half.x * 2 + 0.004, o.half.y * 2 + 0.004, o.half.z * 2 + 0.004), shadowMat);
+    if (!shapeGeo) rec.position.copy(o.center);
+    rec.receiveShadow = true; rec.renderOrder = 1; g.add(rec);
+  }
+
+  const scan = new THREE.Group(); g.add(scan);
+  const lineMat = new THREE.LineBasicMaterial({ color, transparent: true, opacity: 0.9 });
+  if (shapeGeo) {
+    const fill = new THREE.Mesh(shapeGeo.clone().translate(0, 0.004, 0),
+      new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.1, depthWrite: false, side: THREE.DoubleSide }));
+    scan.add(fill);
+    const pts = o.polygon.map(([x, z]) => new THREE.Vector3(x, 0.005, z));
+    scan.add(new THREE.LineLoop(new THREE.BufferGeometry().setFromPoints(pts), lineMat));
+  } else {
+    const e = new THREE.LineSegments(new THREE.EdgesGeometry(boxGeo()), lineMat); e.position.copy(o.center); scan.add(e);
+  }
+  if (o.label !== 'wall' && o.label !== 'ceiling' || o.virtual === false) {
+    const sp = textSprite(labelName(o.label), color);
+    if (shapeGeo) sp.position.set(o.center.x, 0.08, o.center.z);
+    else sp.position.set(o.center.x, o.center.y + o.half.y + 0.08, o.center.z);
+    scan.add(sp);
+  }
+  scan.visible = state.showScan;
+  surfaces.set(key, { body, group: g, scan, label: o.label, virtual: !!o.virtual, sig: o.sig });
+}
+
+function removeSurface(key) {
+  const s = surfaces.get(key); if (!s) return;
+  world.removeBody(s.body);
+  scene.remove(s.group);
+  s.group.traverse(n => { n.geometry?.dispose(); if (n.material && n.material.map) { n.material.map.dispose(); n.material.dispose(); } });
+  surfaces.delete(key);
+}
+
+function surfaceSummary() {
+  const c = {};
+  for (const s of surfaces.values()) c[s.label] = (c[s.label] || 0) + 1;
+  const order = ['floor', 'table', 'desk', 'chair', 'couch', 'bed', 'storage', 'shelf', 'screen', 'wall'];
+  const keys = Object.keys(c).sort((a, b) => (order.indexOf(a) + 99) % 99 - (order.indexOf(b) + 99) % 99);
+  return keys.map(k => (c[k] > 1 ? c[k] + '× ' : '') + labelName(k)).join(', ');
+}
+
+/* ---------- virtual room for the desktop preview ---------- */
+const M = (x, y, z, rx = 0, ry = 0) => new THREE.Matrix4().compose(new THREE.Vector3(x, y, z), new THREE.Quaternion().setFromEuler(new THREE.Euler(rx, ry, 0)), new THREE.Vector3(1, 1, 1));
+function planeSpec(label, w, d, matrix) {
+  const hw = w / 2, hd = d / 2;
+  return { label, matrix, virtual: true, polygon: [[-hw, -hd], [hw, -hd], [hw, hd], [-hw, hd]], center: new THREE.Vector3(0, -0.05, 0), half: new THREE.Vector3(hw, 0.05, hd) };
+}
+function boxSpec(label, x, y, z, hx, hy, hz) {
+  return { label, matrix: M(x, y, z), virtual: true, center: new THREE.Vector3(0, 0, 0), half: new THREE.Vector3(hx, hy, hz) };
+}
+function buildVirtualRoom() {
+  addSurface('v-floor', planeSpec('floor', 5, 5, M(0, 0, 0)));
+  addSurface('v-wall1', planeSpec('wall', 5, 2.7, M(0, 1.35, -2.5, Math.PI / 2)));
+  addSurface('v-wall2', planeSpec('wall', 2.7, 5, M(-2.5, 1.35, 0, 0, 0).multiply(new THREE.Matrix4().makeRotationZ(-Math.PI / 2))));
+  addSurface('v-table', boxSpec('table', 0, 0.375, -0.6, 0.65, 0.375, 0.4));
+  addSurface('v-chair', boxSpec('chair', 1.05, 0.225, -0.35, 0.22, 0.225, 0.22));
+  addSurface('v-chairback', boxSpec('chair', 1.25, 0.65, -0.35, 0.03, 0.2, 0.22));
+  addSurface('v-couch', boxSpec('couch', -1.6, 0.22, 0.9, 0.45, 0.22, 0.95));
+}
+function clearVirtualRoom() { for (const [k, s] of [...surfaces]) if (s.virtual) removeSurface(k); }
+
+/* ---------- objects ---------- */
+const objects = [];
+const geoCube = new RoundedBoxGeometry(1, 1, 1, 3, 0.09);
+const geoBall = new THREE.SphereGeometry(0.5, 32, 20);
+let colorIdx = 0;
+
+function spawn(kind, pos, quat, vel) {
+  const size = 0.075 + Math.random() * 0.05;
+  const color = PALETTE[colorIdx++ % PALETTE.length];
+  const mat = new THREE.MeshStandardMaterial({ color, roughness: kind === 'cube' ? 0.55 : 0.35, metalness: 0 });
+  const mesh = new THREE.Mesh(kind === 'cube' ? geoCube : geoBall, mat);
+  mesh.scale.setScalar(size); mesh.castShadow = true; mesh.receiveShadow = true;
+  scene.add(mesh);
+  const shape = kind === 'cube' ? new CANNON.Box(new CANNON.Vec3(size / 2, size / 2, size / 2)) : new CANNON.Sphere(size / 2);
+  const vol = kind === 'cube' ? size ** 3 : Math.PI / 6 * size ** 3;
+  const body = new CANNON.Body({ mass: vol * 550, material: matObj, shape, linearDamping: 0.03, angularDamping: kind === 'cube' ? 0.08 : 0.25 });
+  body.sleepSpeedLimit = 0.08; body.sleepTimeLimit = 0.8;
+  body.position.set(pos.x, pos.y, pos.z);
+  if (quat) body.quaternion.set(quat.x, quat.y, quat.z, quat.w);
+  if (vel) body.velocity.set(vel.x, vel.y, vel.z);
+  const obj = { kind, size, mesh, body, mat, held: false, lastKnock: 0 };
+  body.addEventListener('collide', e => knock(obj, e));
+  world.addBody(body);
+  objects.push(obj);
+  while (objects.length > 120) { const i = objects.findIndex(o => !o.held); if (i < 0) break; removeObj(objects[i]); }
+  updateCount();
+  return obj;
+}
+function removeObj(o) {
+  world.removeBody(o.body); scene.remove(o.mesh); o.mat.dispose();
+  const i = objects.indexOf(o); if (i >= 0) objects.splice(i, 1);
+}
+function clearAll() {
+  for (const o of [...objects]) if (!o.held) removeObj(o);
+  updateCount();
+}
+
+/* ---------- sound ---------- */
+let actx = null, noiseBuf = null, knocksThisSecond = 0, knockWindow = 0;
+function ensureAudio() {
+  try {
+    if (!actx) {
+      actx = new AudioContext();
+      noiseBuf = actx.createBuffer(1, actx.sampleRate * 0.1, actx.sampleRate);
+      const d = noiseBuf.getChannelData(0);
+      for (let i = 0; i < d.length; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / d.length, 3);
+    }
+    if (actx.state === 'suspended') actx.resume();
+  } catch { actx = null; }
+}
+function knock(obj, e) {
+  if (!actx || obj.held) return;
+  const now = performance.now();
+  if (now - obj.lastKnock < 70) return;
+  const speed = Math.abs(e.contact.getImpactVelocityAlongNormal());
+  if (speed < 0.6) return;
+  if (now - knockWindow > 1000) { knockWindow = now; knocksThisSecond = 0; }
+  if (++knocksThisSecond > 24) return;
+  obj.lastKnock = now;
+  const t = actx.currentTime;
+  const src = actx.createBufferSource(); src.buffer = noiseBuf;
+  const f = actx.createBiquadFilter(); f.type = 'bandpass';
+  f.frequency.value = (obj.kind === 'cube' ? 1300 : 700) + (0.12 - obj.size) * 9000; f.Q.value = 5;
+  const g = actx.createGain(); g.gain.setValueAtTime(Math.min(1, speed / 5) * 0.6, t);
+  g.gain.exponentialRampToValueAtTime(0.001, t + 0.09);
+  src.connect(f).connect(g).connect(actx.destination); src.start(t); src.stop(t + 0.1);
+}
+
+/* ---------- controls shared by desktop UI and XR buttons ---------- */
+const $ = id => document.getElementById(id);
+function setShape(s) {
+  state.shape = s;
+  $('shapeCube').setAttribute('aria-pressed', s === 'cube');
+  $('shapeBall').setAttribute('aria-pressed', s === 'sphere');
+  panelDirty = true;
+}
+function toggleShape() { setShape(state.shape === 'cube' ? 'sphere' : 'cube'); }
+function toggleGravity() {
+  state.gravity = !state.gravity;
+  world.gravity.set(0, state.gravity ? G : 0, 0);
+  for (const o of objects) {
+    o.body.wakeUp();
+    if (!state.gravity && !o.held) o.body.velocity.vadd(new CANNON.Vec3((Math.random() - .5) * .15, 0.12 + Math.random() * .1, (Math.random() - .5) * .15), o.body.velocity);
+  }
+  $('grav').setAttribute('aria-pressed', state.gravity);
+  $('gval').textContent = state.gravity ? '9,81 м/с²' : '0 м/с²';
+  panelDirty = true;
+}
+function toggleScan() {
+  state.showScan = !state.showScan;
+  for (const s of surfaces.values()) s.scan.visible = state.showScan;
+  $('scan').setAttribute('aria-pressed', state.showScan);
+  panelDirty = true;
+}
+function updateCount() {
+  const n = objects.length;
+  const w = n % 10 === 1 && n % 100 !== 11 ? 'фигура' : (n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 10 || n % 100 >= 20)) ? 'фигуры' : 'фигур';
+  $('count').textContent = `${n} ${w}`;
+  panelDirty = true;
+}
+$('shapeCube').onclick = () => setShape('cube');
+$('shapeBall').onclick = () => setShape('sphere');
+$('grav').onclick = toggleGravity;
+$('scan').onclick = toggleScan;
+$('clear').onclick = clearAll;
+addEventListener('keydown', e => {
+  if (e.target.closest && e.target.closest('input,textarea')) return;
+  if (e.key === '1') setShape('cube');
+  else if (e.key === '2') setShape('sphere');
+  else if (e.key === 'g' || e.key === 'п') toggleGravity();
+  else if (e.key === 'c' || e.key === 'с') clearAll();
+  else if (e.key === 'r' || e.key === 'к') toggleScan();
+});
+
+/* ---------- desktop: click to throw ---------- */
+const raycaster = new THREE.Raycaster();
+let downXY = null;
+renderer.domElement.addEventListener('pointerdown', e => { ensureAudio(); downXY = [e.clientX, e.clientY]; });
+renderer.domElement.addEventListener('pointerup', e => {
+  if (!downXY || state.xr || e.button !== 0) return;
+  const moved = Math.hypot(e.clientX - downXY[0], e.clientY - downXY[1]); downXY = null;
+  if (moved > 6) return;
+  const ndc = new THREE.Vector2(e.clientX / innerWidth * 2 - 1, -(e.clientY / innerHeight) * 2 + 1);
+  raycaster.setFromCamera(ndc, camera);
+  const dir = raycaster.ray.direction.clone();
+  const pos = camera.position.clone().addScaledVector(dir, 0.35);
+  const vel = dir.multiplyScalar(5.5).add(new THREE.Vector3(0, 0.8, 0));
+  const q = new THREE.Quaternion().setFromEuler(new THREE.Euler(Math.random() * 3, Math.random() * 3, 0));
+  const o = spawn(state.shape, pos, q, vel);
+  o.body.angularVelocity.set((Math.random() - .5) * 8, (Math.random() - .5) * 8, (Math.random() - .5) * 8);
+});
+
+function seedDemo() {
+  const q0 = new THREE.Quaternion();
+  for (let i = 0; i < 4; i++) {
+    const q = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), i * 0.35);
+    spawn('cube', new THREE.Vector3(-0.25, 0.84 + i * 0.15, -0.6), q);
+  }
+  spawn('sphere', new THREE.Vector3(0.25, 0.85, -0.5), q0);
+  spawn('cube', new THREE.Vector3(1.05, 0.55, -0.35), q0);
+  spawn('sphere', new THREE.Vector3(1.0, 0.75, -0.3), q0);
+  spawn('sphere', new THREE.Vector3(-1.5, 0.6, 0.8), q0);
+}
+
+/* ---------- XR: wrist panel ---------- */
+const panelCanvas = document.createElement('canvas'); panelCanvas.width = 640; panelCanvas.height = 440;
+const panelTex = new THREE.CanvasTexture(panelCanvas); panelTex.colorSpace = THREE.SRGBColorSpace;
+const panel = new THREE.Mesh(new THREE.PlaneGeometry(0.16, 0.11), new THREE.MeshBasicMaterial({ map: panelTex, transparent: true }));
+panel.matrixAutoUpdate = false; panel.visible = false; panel.renderOrder = 10;
+scene.add(panel);
+const panelLocal = new THREE.Matrix4().compose(new THREE.Vector3(0, 0.07, 0.03), new THREE.Quaternion().setFromEuler(new THREE.Euler(-1.0, 0, 0)), new THREE.Vector3(1, 1, 1));
+let panelDirty = true;
+function drawPanel(noRoom) {
+  const x = panelCanvas.getContext('2d');
+  x.clearRect(0, 0, 640, 440);
+  x.fillStyle = 'rgba(22,27,36,0.92)'; x.beginPath(); x.roundRect(0, 0, 640, 440, 36); x.fill();
+  x.fillStyle = '#eef2f7'; x.font = '700 40px Unbounded, "Golos Text", sans-serif'; x.fillText('Архифизика', 32, 66);
+  x.font = '600 30px "Golos Text", system-ui, sans-serif';
+  const row = (y, k, v, c) => { x.fillStyle = '#9aa8b8'; x.fillText(k, 32, y); x.fillStyle = c || '#eef2f7'; x.fillText(v, 250, y); };
+  row(124, 'Форма', state.shape === 'cube' ? '■ кубик' : '● шарик', state.shape === 'cube' ? '#e5483b' : '#5b9cf0');
+  row(170, 'Гравитация', state.gravity ? '9,81 м/с²' : '0, невесомость', '#f2b632');
+  row(216, 'Фигур', String(objects.length));
+  x.fillStyle = '#9aa8b8'; x.fillText('Вижу:', 32, 262);
+  x.fillStyle = '#eef2f7';
+  const sum = noRoom ? 'комната не найдена' : (surfaceSummary() || 'ищу поверхности…');
+  wrap(x, sum, 130, 262, 480, 36, 2);
+  x.font = '500 24px "Golos Text", system-ui, sans-serif'; x.fillStyle = '#9aa8b8';
+  if (noRoom) { x.fillStyle = '#f2b632'; wrap(x, 'Нажми левый стик, чтобы отметить пол, стол и мебель', 32, 350, 580, 30, 2); }
+  else wrap(x, 'Курок — создать · Grip — схватить · A форма · B гравитация · X скан · Y очистить', 32, 350, 580, 30, 2);
+  panelTex.needsUpdate = true; panelDirty = false;
+}
+function wrap(ctx, text, x, y, maxW, lh, maxLines) {
+  const words = text.split(' '); let line = ''; let n = 0;
+  for (const w of words) {
+    const t = line ? line + ' ' + w : w;
+    if (ctx.measureText(t).width > maxW && line) { if (++n >= maxLines) { line += '…'; break; } ctx.fillText(line, x, y); y += lh; line = w; }
+    else line = t;
+  }
+  if (line) ctx.fillText(line, x, y);
+}
+
+/* ---------- XR: hands, grabbing, throwing ---------- */
+const hands = new Map();
+const tmpM = new THREE.Matrix4(), tmpV = new THREE.Vector3(), tmpQ = new THREE.Quaternion();
+function makeRay() {
+  const g = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, 0, -1)]);
+  const l = new THREE.Line(g, new THREE.LineBasicMaterial({ color: '#f2b632', transparent: true, opacity: 0.7 }));
+  l.matrixAutoUpdate = false; l.visible = false; scene.add(l);
+  const dot = new THREE.Mesh(new THREE.SphereGeometry(0.006, 12, 8), new THREE.MeshBasicMaterial({ color: '#f2b632' }));
+  dot.visible = false; scene.add(dot);
+  return { line: l, dot };
+}
+function handOf(src) {
+  let h = hands.get(src);
+  if (!h) {
+    h = { held: null, by: null, offset: new THREE.Matrix4(), samples: [], prev: [], m: new THREE.Matrix4(), grip: new THREE.Matrix4(), valid: false,
+      rayM: new THREE.Matrix4(), rayValid: false, ray: makeRay(), hover: null, tp: new THREE.Vector3(), tq: new THREE.Quaternion() };
+    hands.set(src, h);
+  }
+  return h;
+}
+function dropHand(src) {
+  const h = hands.get(src); if (!h) return;
+  if (h.held) release(h);
+  scene.remove(h.ray.line, h.ray.dot); hands.delete(src);
+}
+
+function readHand(src, frame, ref, h) {
+  h.valid = false;
+  const gp = src.gripSpace && frame.getPose(src.gripSpace, ref);
+  if (gp) { h.grip.fromArray(gp.transform.matrix); h.m.copy(h.grip); h.valid = true; }
+  if (src.hand && frame.getJointPose) {
+    const a = frame.getJointPose(src.hand.get('index-finger-tip'), ref);
+    const b = frame.getJointPose(src.hand.get('thumb-tip'), ref);
+    const w = frame.getJointPose(src.hand.get('wrist'), ref);
+    if (a && b) {
+      const p = new THREE.Vector3((a.transform.position.x + b.transform.position.x) / 2, (a.transform.position.y + b.transform.position.y) / 2, (a.transform.position.z + b.transform.position.z) / 2);
+      const o = (gp || w) ? (gp || w).transform.orientation : { x: 0, y: 0, z: 0, w: 1 };
+      h.m.compose(p, tmpQ.set(o.x, o.y, o.z, o.w), _s.set(1, 1, 1));
+      h.valid = true;
+      if (!gp && w) h.grip.fromArray(w.transform.matrix);
+    }
+  }
+  const rp = src.targetRaySpace && frame.getPose(src.targetRaySpace, ref);
+  h.rayValid = !!rp; if (rp) h.rayM.fromArray(rp.transform.matrix);
+}
+
+function nearest(pos) {
+  let best = null, bd = Infinity;
+  for (const o of objects) {
+    if (o.held) continue;
+    const d = o.mesh.position.distanceTo(pos) - o.size * 0.6;
+    if (d < 0.06 && d < bd) { bd = d; best = o; }
+  }
+  return best;
+}
+function rayHit(h) {
+  if (!h.rayValid) return null;
+  h.rayM.decompose(_p, _q, _s);
+  raycaster.set(_p.clone(), new THREE.Vector3(0, 0, -1).applyQuaternion(_q));
+  raycaster.far = 8;
+  const hits = raycaster.intersectObjects(objects.filter(o => !o.held).map(o => o.mesh), false);
+  if (!hits.length) return null;
+  return { obj: objects.find(o => o.mesh === hits[0].object), dist: hits[0].distance, point: hits[0].point };
+}
+
+function grab(h, obj, offset, by) {
+  h.held = obj; h.by = by; obj.held = true; h.offset.copy(offset); h.samples.length = 0;
+  obj.body.type = CANNON.Body.KINEMATIC; obj.body.velocity.setZero(); obj.body.angularVelocity.setZero(); obj.body.wakeUp();
+  obj.mat.emissive.set(0x000000);
+}
+function release(h) {
+  const o = h.held; if (!o) return;
+  h.held = null; h.by = null; o.held = false;
+  const b = o.body;
+  b.type = CANNON.Body.DYNAMIC; b.updateMassProperties();
+  const { v, w } = estimate(h);
+  b.velocity.set(v.x * 1.1, v.y * 1.1, v.z * 1.1);
+  b.angularVelocity.set(w.x, w.y, w.z);
+  b.wakeUp();
+  updateCount();
+}
+function estimate(h) {
+  const s = h.samples, v = new THREE.Vector3(), w = new THREE.Vector3();
+  if (s.length < 2) return { v, w };
+  const last = s[s.length - 1];
+  let first = s[0];
+  for (const x of s) if (last.t - x.t <= 70) { first = x; break; }
+  const dt = (last.t - first.t) / 1000;
+  if (dt <= 0.001) return { v, w };
+  v.subVectors(last.p, first.p).divideScalar(dt);
+  const dq = last.q.clone().multiply(first.q.clone().invert());
+  if (dq.w < 0) { dq.x *= -1; dq.y *= -1; dq.z *= -1; dq.w *= -1; }
+  const ang = 2 * Math.acos(Math.min(1, dq.w)), sn = Math.sqrt(Math.max(0, 1 - dq.w * dq.w));
+  if (sn > 1e-4) w.set(dq.x / sn, dq.y / sn, dq.z / sn).multiplyScalar(ang / dt);
+  if (w.length() > 30) w.setLength(30);
+  return { v, w };
+}
+
+function press(src, kind, frame) {
+  ensureAudio();
+  const ref = renderer.xr.getReferenceSpace();
+  const h = handOf(src);
+  readHand(src, frame, ref, h);
+  if (!h.valid || h.held) return;
+  h.m.decompose(_p, _q, _s);
+  const near = nearest(_p);
+  if (near) {
+    grab(h, near, h.m.clone().invert().multiply(new THREE.Matrix4().compose(near.mesh.position, near.mesh.quaternion, new THREE.Vector3(1, 1, 1))), kind);
+    pulse(src, 0.35, 25); return;
+  }
+  const inFront = sz => new THREE.Matrix4().makeTranslation(0, src.hand ? 0 : -0.01, src.hand ? 0 : -(0.05 + sz / 2));
+  if (kind === 'squeeze') {
+    const hit = rayHit(h);
+    if (hit) {
+      const off = inFront(hit.obj.size);
+      const rel = new THREE.Matrix4().makeRotationFromQuaternion(_q.clone().invert().multiply(hit.obj.mesh.quaternion));
+      grab(h, hit.obj, off.multiply(rel), kind); pulse(src, 0.5, 40);
+    }
+    return;
+  }
+  // select with nothing near: create a new shape in the hand
+  const shape = src.hand ? (handSpawnToggle = !handSpawnToggle) ? 'cube' : 'sphere' : state.shape;
+  const o = spawn(shape, _p, _q);
+  grab(h, o, inFront(o.size), kind);
+  pulse(src, 0.25, 20);
+}
+let handSpawnToggle = false;
+function pulse(src, v, ms) { try { src.gamepad?.hapticActuators?.[0]?.pulse(v, ms); } catch {} }
+
+function roomCapture() {
+  const s = renderer.xr.getSession();
+  if (s && typeof s.initiateRoomCapture === 'function') s.initiateRoomCapture().catch(() => {});
+}
+
+/* ---------- XR: room understanding ---------- */
+function sigOf(pose, extra) {
+  const p = pose.transform.position, o = pose.transform.orientation;
+  return { extra, p: new THREE.Vector3(p.x, p.y, p.z), q: new THREE.Quaternion(o.x, o.y, o.z, o.w) };
+}
+function sigChanged(a, b) {
+  return !a || a.extra !== b.extra || a.p.distanceTo(b.p) > 0.01 || a.q.angleTo(b.q) > 0.02;
+}
+let lastSurfaceCount = -1;
+function syncRoom(frame, ref) {
+  const seen = new Set();
+  if (frame.detectedPlanes) {
+    for (const plane of frame.detectedPlanes) {
+      const pose = frame.getPose(plane.planeSpace, ref); if (!pose) continue;
+      seen.add(plane);
+      const sig = sigOf(pose, plane.lastChangedTime);
+      if (!sigChanged(surfaces.get(plane)?.sig, sig)) continue;
+      const poly = plane.polygon.map(p => [p.x, p.z]);
+      if (poly.length < 3) continue;
+      let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
+      for (const [x, z] of poly) { minX = Math.min(minX, x); maxX = Math.max(maxX, x); minZ = Math.min(minZ, z); maxZ = Math.max(maxZ, z); }
+      const T = 0.1;
+      let label = (plane.semanticLabel || (plane.orientation === 'horizontal' ? 'table' : 'wall')).toLowerCase();
+      addSurface(plane, {
+        label, sig, polygon: poly, virtual: false,
+        matrix: new THREE.Matrix4().fromArray(pose.transform.matrix),
+        center: new THREE.Vector3((minX + maxX) / 2, -T / 2, (minZ + maxZ) / 2),
+        half: new THREE.Vector3(Math.max(0.01, (maxX - minX) / 2), T / 2, Math.max(0.01, (maxZ - minZ) / 2))
+      });
+    }
+  }
+  if (frame.detectedMeshes) {
+    for (const mesh of frame.detectedMeshes) {
+      const label = (mesh.semanticLabel || 'other').toLowerCase();
+      if (label === 'global mesh' || label === 'global_mesh' || mesh.vertices.length > 64 * 3) continue;
+      const pose = frame.getPose(mesh.meshSpace, ref); if (!pose) continue;
+      seen.add(mesh);
+      const sig = sigOf(pose, mesh.lastChangedTime);
+      if (!sigChanged(surfaces.get(mesh)?.sig, sig)) continue;
+      const v = mesh.vertices;
+      const mn = new THREE.Vector3(Infinity, Infinity, Infinity), mx = new THREE.Vector3(-Infinity, -Infinity, -Infinity);
+      for (let i = 0; i < v.length; i += 3) { mn.min(tmpV.set(v[i], v[i + 1], v[i + 2])); mx.max(tmpV); }
+      const half = mx.clone().sub(mn).multiplyScalar(0.5);
+      if (half.x < 0.01 || half.y < 0.005 || half.z < 0.01) continue;
+      addSurface(mesh, { label, sig, virtual: false, matrix: new THREE.Matrix4().fromArray(pose.transform.matrix), center: mn.clone().add(mx).multiplyScalar(0.5), half });
+    }
+  }
+  for (const [k, s] of [...surfaces]) if (!s.virtual && !seen.has(k)) removeSurface(k);
+  let hasFloor = false; for (const s of surfaces.values()) if (s.label === 'floor') hasFloor = true;
+  xrFloorCatcher.visible = !hasFloor;
+  if (surfaces.size !== lastSurfaceCount) { lastSurfaceCount = surfaces.size; panelDirty = true; }
+}
+
+/* ---------- XR session ---------- */
+const enterBtn = $('enter'), note = $('enterNote');
+async function checkXR() {
+  let ok = false;
+  try { ok = !!(navigator.xr && await navigator.xr.isSessionSupported('immersive-ar')); } catch { ok = false; }
+  if (ok) { enterBtn.disabled = false; enterBtn.textContent = 'Войти в смешанную реальность'; }
+  else {
+    enterBtn.textContent = 'Шлем не найден';
+    note.hidden = false;
+    note.textContent = 'Открой эту страницу в браузере Meta Quest 3. Здесь работает превью: кликай, чтобы бросать фигуры.';
+  }
+}
+checkXR();
+
+let session = null;
+enterBtn.onclick = async () => {
+  ensureAudio();
+  if (session) { session.end(); return; }
+  try {
+    session = await navigator.xr.requestSession('immersive-ar', {
+      requiredFeatures: ['local-floor'],
+      optionalFeatures: ['plane-detection', 'mesh-detection', 'hand-tracking']
+    });
+  } catch (err) {
+    note.hidden = false; note.textContent = 'Не удалось запустить: ' + (err.message || err.name) + '. Проверь, что дал доступ к пространству.';
+    return;
+  }
+  session.addEventListener('end', onEnd);
+  session.addEventListener('selectstart', e => press(e.inputSource, 'select', e.frame));
+  session.addEventListener('selectend', e => { const h = hands.get(e.inputSource); if (h && h.by === 'select') release(h); });
+  session.addEventListener('squeezestart', e => press(e.inputSource, 'squeeze', e.frame));
+  session.addEventListener('squeezeend', e => { const h = hands.get(e.inputSource); if (h && h.by === 'squeeze') release(h); });
+  session.addEventListener('inputsourceschange', e => { for (const s of e.removed) dropHand(s); });
+  await renderer.xr.setSession(session);
+  state.xr = true; state.roomHintAt = performance.now() + 4000;
+  controls.enabled = false;
+  scene.background = null; scene.fog = null;
+  renderer.setClearColor(0x000000, 0);
+  clearAll(); clearVirtualRoom();
+  document.querySelectorAll('.ui,.hint').forEach(el => el.style.visibility = 'hidden');
+  panelDirty = true;
+};
+function onEnd() {
+  session = null; state.xr = false;
+  for (const src of [...hands.keys()]) dropHand(src);
+  for (const [k, s] of [...surfaces]) if (!s.virtual) removeSurface(k);
+  xrFloorCatcher.visible = false; panel.visible = false;
+  scene.background = DESK_BG; scene.fog = new THREE.Fog('#1b2029', 6, 14);
+  sun.position.set(1.6, 4, 1.2); sun.target.position.set(0, 0, 0); sun.target.updateMatrixWorld();
+  controls.enabled = true;
+  document.querySelectorAll('.ui,.hint').forEach(el => el.style.visibility = '');
+  clearAll(); buildVirtualRoom(); seedDemo();
+}
+
+/* ---------- main loop ---------- */
+let lastT = 0;
+const tmpVec = new THREE.Vector3();
+renderer.setAnimationLoop((t, frame) => {
+  const dt = Math.min(0.05, lastT ? (t - lastT) / 1000 : 1 / 72); lastT = t;
+  const xrActive = renderer.xr.isPresenting && frame;
+
+  if (xrActive) {
+    const ref = renderer.xr.getReferenceSpace();
+    syncRoom(frame, ref);
+    const vp = frame.getViewerPose(ref);
+    if (vp) {
+      const p = vp.transform.position;
+      sun.position.set(p.x + 1.2, p.y + 3, p.z + 0.9);
+      sun.target.position.set(p.x, 0, p.z); sun.target.updateMatrixWorld();
+      xrFloorCatcher.position.set(p.x, 0.001, p.z);
+    }
+    let leftSeen = false;
+    for (const src of frame.session.inputSources) {
+      const h = handOf(src);
+      readHand(src, frame, ref, h);
+      const gp = src.gamepad;
+      if (gp && !src.hand) {
+        const b = gp.buttons.map(x => x.pressed);
+        const edge = i => b[i] && !h.prev[i];
+        if (src.handedness === 'right') { if (edge(4)) toggleShape(); if (edge(5)) toggleGravity(); if (edge(3)) clearAll(); }
+        if (src.handedness === 'left') { if (edge(4)) toggleScan(); if (edge(5)) clearAll(); if (edge(3)) roomCapture(); }
+        h.prev = b;
+      }
+      // pointing ray (controllers only, real hands are visible in passthrough)
+      if (h.hover) { h.hover.mat.emissive.set(0x000000); h.hover = null; }
+      if (!src.hand && h.rayValid && !h.held) {
+        const hit = rayHit(h);
+        const len = hit ? hit.dist : 0.6;
+        h.ray.line.matrix.copy(h.rayM).multiply(tmpM.makeScale(1, 1, len));
+        h.ray.line.visible = true;
+        h.ray.dot.visible = !!hit; if (hit) h.ray.dot.position.copy(hit.point);
+        if (hit) { h.hover = hit.obj; hit.obj.mat.emissive.set(0x3a2c08); }
+        else if (h.valid) { h.m.decompose(_p, _q, _s); const n = nearest(_p); if (n) { h.hover = n; n.mat.emissive.set(0x3a2c08); } }
+      } else { h.ray.line.visible = false; h.ray.dot.visible = false; }
+      if (h.held && h.valid) {
+        tmpM.multiplyMatrices(h.m, h.offset).decompose(h.tp, h.tq, _s);
+        h.samples.push({ t, p: h.tp.clone(), q: h.tq.clone() }); if (h.samples.length > 12) h.samples.shift();
+        const b = h.held.body; b.position.set(h.tp.x, h.tp.y, h.tp.z); b.quaternion.set(h.tq.x, h.tq.y, h.tq.z, h.tq.w);
+        const { v, w } = estimate(h); b.velocity.set(v.x, v.y, v.z); b.angularVelocity.set(w.x, w.y, w.z);
+      }
+      if (src.handedness === 'left' && h.valid) {
+        leftSeen = true;
+        panel.matrix.multiplyMatrices(h.grip, panelLocal);
+        panel.matrixWorldNeedsUpdate = true;
+      }
+    }
+    panel.visible = leftSeen;
+    const noRoom = surfaces.size === 0 && performance.now() > state.roomHintAt;
+    if (noRoom !== state.noRoom) { state.noRoom = noRoom; panelDirty = true; }
+    if (panelDirty && panel.visible) drawPanel(noRoom);
+  } else {
+    controls.update();
+  }
+
+  world.step(1 / 120, dt, 8);
+
+  // keep held objects exactly in hand after the step
+  for (const h of hands.values()) if (h.held) { const b = h.held.body; b.position.set(h.tp.x, h.tp.y, h.tp.z); b.quaternion.set(h.tq.x, h.tq.y, h.tq.z, h.tq.w); }
+
+  for (const o of [...objects]) {
+    o.mesh.position.copy(o.body.position);
+    o.mesh.quaternion.copy(o.body.quaternion);
+    if (o.body.position.y < -5 && !o.held) { removeObj(o); updateCount(); }
+  }
+  renderer.render(scene, camera);
+});
+
+addEventListener('resize', () => {
+  if (renderer.xr.isPresenting) return;
+  camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth, innerHeight);
+});
+
+if (innerWidth < 760) $('help').open = false;
+buildVirtualRoom();
+seedDemo();
+</script>
+</body>
+</html>
