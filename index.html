@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>VR Физик</title>
+<title>VRfizzik</title>
 <meta name="description" content="Физическая песочница в смешанной реальности для Meta Quest 3: кубики и шарики падают на твой настоящий стол, стул и пол.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -87,7 +87,7 @@ button[aria-pressed="true"]{background:#2b3646;border-color:#5b6f88}
 
 <div class="ui top">
   <div class="brand">
-    <h1><span>VR Физик</span><i></i><i></i></h1>
+    <h1><span>VRfizzik</span><i></i><i></i></h1>
     <p>Кубики и шарики с настоящей физикой: хватай, бросай, ставь на свой стол и стул в Quest 3. Сергей Дмитриев · Rock Parametric</p>
   </div>
   <div class="enter">
@@ -530,7 +530,7 @@ function drawPanel(noRoom) {
   const x = panelCanvas.getContext('2d');
   x.clearRect(0, 0, 640, 440);
   x.fillStyle = 'rgba(22,27,36,0.92)'; x.beginPath(); x.roundRect(0, 0, 640, 440, 36); x.fill();
-  x.fillStyle = '#eef2f7'; x.font = '700 40px Unbounded, "Golos Text", sans-serif'; x.fillText('VR Физик', 32, 66);
+  x.fillStyle = '#eef2f7'; x.font = '700 40px Unbounded, "Golos Text", sans-serif'; x.fillText('VRfizzik', 32, 66);
   x.font = '600 30px "Golos Text", system-ui, sans-serif';
   const row = (y, k, v, c) => { x.fillStyle = '#9aa8b8'; x.fillText(k, 32, y); x.fillStyle = c || '#eef2f7'; x.fillText(v, 250, y); };
   row(124, 'Форма', state.shape === 'cube' ? '■ кубик' : '● шарик', state.shape === 'cube' ? '#e5483b' : '#5b9cf0');
