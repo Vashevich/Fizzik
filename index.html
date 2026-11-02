@@ -28,6 +28,7 @@
   .chk{display:flex;gap:8px;align-items:center;margin:2px 0}
   #stage{flex:1;position:relative;overflow:hidden;min-width:0}
   canvas{position:absolute;inset:0;display:block;touch-action:none}
+  #frame{position:absolute;border:1px dashed var(--acc);background:rgba(200,66,31,.08);pointer-events:none;display:none}
   #pauseBadge{position:absolute;left:50%;top:12px;transform:translateX(-50%);background:var(--ink);color:#fff;border-radius:6px;padding:6px 12px;font-size:12px;font-weight:600;letter-spacing:.03em;pointer-events:none;display:none}
   body.paused #pauseBadge{display:block}
   #hint{position:absolute;left:12px;bottom:10px;background:rgba(251,250,246,.92);border:1px solid var(--line);border-radius:6px;padding:5px 9px;font-size:12px;color:var(--mute);pointer-events:none;max-width:70%}
@@ -55,6 +56,7 @@
         <button data-tool="select">Выбрать</button>
         <button data-tool="pull">Тянуть</button>
         <button data-tool="erase">Стереть</button>
+        <button data-tool="angle">Угол</button>
       </div>
     </fieldset>
 
@@ -82,10 +84,26 @@
       <div class="note">Нарисованное стоит на месте. Выберите точки (инструмент «Выбрать») и нажмите направление — они начнут двигаться. Если ничего не выбрано, нагрузка назначается всем. Точки с нагрузкой синие.</div>
     </fieldset>
 
+    <fieldset><legend>Якорь</legend>
+      <div class="row">
+        <button id="anchorOn">Закрепить выбранные</button>
+        <button id="anchorOff">Отпустить</button>
+      </div>
+      <div class="note">Выделите точки рамкой (инструмент «Выбрать», тянуть по пустому месту) и закрепите все сразу.</div>
+    </fieldset>
+
     <fieldset><legend>Пружина</legend>
       <label class="sl">Длина линии <b id="springVal">0.00</b>
         <input type="range" id="spring" min="-1" max="1" step="0.05" value="0"></label>
       <div class="note">0 — как нарисовано, 1 — вдвое длиннее, −1 — вдвое короче. Действует на выбранные линии; если ничего не выбрано — на все.</div>
+    </fieldset>
+
+    <fieldset><legend>Угол</legend>
+      <div class="row">
+        <button id="angleOn">Зафиксировать</button>
+        <button id="angleOff">Снять</button>
+      </div>
+      <div class="note">В выбранных точках сохраняются углы между всеми линиями, которые в них сходятся. Куб из 12 линий: выделите рамкой все 8 углов и нажмите «Зафиксировать» — куб держит форму. Если ничего не выбрано — действует на все точки. Точки с углом фиолетовые.</div>
     </fieldset>
 
     <fieldset><legend>Коллизия</legend>
@@ -125,7 +143,7 @@
       <div class="note">JSON хранит всё, чтобы продолжить работу. OBJ и PNG — текущий вид (после провисания).</div>
     </fieldset>
   </div>
-  <div id="stage"><canvas id="c"></canvas><div id="pauseBadge">ПАУЗА · расчёт стоит, можно рисовать и менять силы</div><div id="hint"></div></div>
+  <div id="stage"><canvas id="c"></canvas><div id="frame"></div><div id="pauseBadge">ПАУЗА · расчёт стоит, можно рисовать и менять силы</div><div id="hint"></div></div>
 </div>
 
 <script type="module">
@@ -188,7 +206,8 @@ scene.add(arrow);
 
 /* ---------- состояние ---------- */
 // у точки: f — назначенная нагрузка {dx,dy,dz,s} или null (тогда точка стоит на месте)
-const S = { points: [], links: [], boxes: [], ceiling: false };
+// углы: {a, b, c, t} — угол t в вершине b между линиями b–a и b–c сохраняется
+const S = { points: [], links: [], angles: [], boxes: [], ceiling: false };
 let loadStrength = 1;   // сила, которая назначается при нажатии направления
 const sel = { points: new Set(), box: -1 };
 let tool = 'draw';
@@ -196,6 +215,7 @@ let plane = 'XY';
 let paused = false;
 let drawing = null;       // {last, plane, moved}
 let pullIdx = -1;
+let frame = null;         // рамка выделения {x0,y0,x1,y1,shift}
 const pullTarget = new THREE.Vector3();
 let pullPlane = null;
 let tcDragging = false;
@@ -213,13 +233,14 @@ for (const m of [pointMesh, anchorMesh, linkMesh]) {
   m.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
   m.frustumCulled = false; m.count = 0; scene.add(m);
 }
-const C = { point: new THREE.Color(0x4a463d), loaded: new THREE.Color(0x2b6cb0), anchor: new THREE.Color(0xc8421f), link: new THREE.Color(0x1d1b17),
+const C = { point: new THREE.Color(0x4a463d), loaded: new THREE.Color(0x2b6cb0), angle: new THREE.Color(0x7b3fa0), anchor: new THREE.Color(0xc8421f), link: new THREE.Color(0x1d1b17),
   spring: new THREE.Color(0xc8421f), sel: new THREE.Color(0xe08a00) };
 const _m = new THREE.Matrix4(), _q = new THREE.Quaternion(), _p = new THREE.Vector3(),
   _s = new THREE.Vector3(), _d = new THREE.Vector3(), _up = new THREE.Vector3(0, 1, 0);
 
 function updateVisuals() {
   let np = 0, na = 0;
+  const angV = new Set(S.angles.map(g => g.b));
   S.points.forEach((p, i) => {
     const sl = sel.points.has(i);
     if (p.a) {
@@ -227,7 +248,7 @@ function updateVisuals() {
       anchorMesh.setMatrixAt(na, _m); anchorMesh.setColorAt(na, sl ? C.sel : C.anchor); na++;
     } else {
       _m.compose(_p.set(p.x, p.y, p.z), _q.identity(), _s.set(0.035, 0.035, 0.035));
-      pointMesh.setMatrixAt(np, _m); pointMesh.setColorAt(np, sl ? C.sel : (p.f ? C.loaded : C.point)); np++;
+      pointMesh.setMatrixAt(np, _m); pointMesh.setColorAt(np, sl ? C.sel : (angV.has(i) ? C.angle : (p.f ? C.loaded : C.point))); np++;
     }
   });
   pointMesh.count = np; anchorMesh.count = na;
@@ -281,6 +302,7 @@ function serialize() {
     app: 'Fizzik', version: 2,
     points: S.points.map(p => ({ x: r4(p.x), y: r4(p.y), z: r4(p.z), a: p.a ? 1 : 0, f: p.f ? { dx: p.f.dx, dy: p.f.dy, dz: p.f.dz, s: p.f.s } : null })),
     links: S.links.map(l => ({ a: l.a, b: l.b, L: r4(l.L), k: l.k })),
+    angles: S.angles.map(g => ({ a: g.a, b: g.b, c: g.c, t: r4(g.t) })),
     boxes: S.boxes.map(b => ({ x: r4(b.x), y: r4(b.y), z: r4(b.z), w: b.w, h: b.h, d: b.d })),
     ceiling: S.ceiling
   });
@@ -289,6 +311,7 @@ function restore(o) {
   S.points = o.points.map(p => ({ x: p.x, y: p.y, z: p.z, px: p.x, py: p.y, pz: p.z, a: !!p.a,
     f: p.f && Number.isFinite(p.f.s) ? { dx: +p.f.dx || 0, dy: +p.f.dy || 0, dz: +p.f.dz || 0, s: p.f.s } : null }));
   S.links = o.links.map(l => ({ a: l.a, b: l.b, L: l.L, k: l.k || 0 }));
+  S.angles = (o.angles || []).map(g => ({ a: g.a, b: g.b, c: g.c, t: g.t }));
   S.boxes = (o.boxes || []).map(b => ({ x: b.x, y: b.y, z: b.z, w: b.w, h: b.h, d: b.d }));
   S.ceiling = !!o.ceiling;
   sel.points.clear(); sel.box = -1;
@@ -393,7 +416,33 @@ function addLink(a, b) {
   const pa = S.points[a], pb = S.points[b];
   S.links.push({ a, b, L: Math.hypot(pb.x - pa.x, pb.y - pa.y, pb.z - pa.z), k: 0 });
 }
+const lkey = (a, b) => (a < b ? a * 10000 + b : b * 10000 + a);
+function pruneAngles() {   // убрать углы, у которых исчезла одна из двух линий
+  const have = new Set(S.links.map(l => lkey(l.a, l.b)));
+  S.angles = S.angles.filter(g => have.has(lkey(g.a, g.b)) && have.has(lkey(g.b, g.c)));
+}
+function angleBetween(a, b, c) {
+  const pa = S.points[a], pb = S.points[b], pc = S.points[c];
+  const ux = pa.x - pb.x, uy = pa.y - pb.y, uz = pa.z - pb.z, vx = pc.x - pb.x, vy = pc.y - pb.y, vz = pc.z - pb.z;
+  const d = Math.hypot(ux, uy, uz) * Math.hypot(vx, vy, vz) || 1e-9;
+  return Math.acos(Math.max(-1, Math.min(1, (ux * vx + uy * vy + uz * vz) / d)));
+}
+function fixAngles(idx) {   // у каждой точки — все пары сходящихся в ней линий
+  for (const b of idx) {
+    const nb = [];
+    for (const l of S.links) { if (l.a === b) nb.push(l.b); else if (l.b === b) nb.push(l.a); }
+    if (nb.length < 2 || nb.length > 8) continue;
+    for (let i = 0; i < nb.length; i++) for (let j = i + 1; j < nb.length; j++) {
+      const a = nb[i], c = nb[j];
+      if (S.angles.some(g => g.b === b && ((g.a === a && g.c === c) || (g.a === c && g.c === a)))) continue;
+      S.angles.push({ a, b, c, t: angleBetween(a, b, c) });
+    }
+  }
+}
+function releaseAngles(idx) { const s = new Set(idx); S.angles = S.angles.filter(g => !s.has(g.b)); }
 function erasePoint(i) {
+  S.angles = S.angles.filter(g => g.a !== i && g.b !== i && g.c !== i);
+  S.angles.forEach(g => { if (g.a > i) g.a--; if (g.b > i) g.b--; if (g.c > i) g.c--; });
   S.links = S.links.filter(l => l.a !== i && l.b !== i);
   S.links.forEach(l => { if (l.a > i) l.a--; if (l.b > i) l.b--; });
   S.points.splice(i, 1);
@@ -435,7 +484,23 @@ function step() {
     const p = S.points[pullIdx];
     p.x = p.px = pullTarget.x; p.y = p.py = pullTarget.y; p.z = p.pz = pullTarget.z;
   }
+  const tlen = new Map();   // текущая целевая длина каждой линии (с учётом пружины)
+  if (S.angles.length) for (const l of S.links) tlen.set(lkey(l.a, l.b), l.L * Math.pow(2, Math.max(-1, Math.min(1, l.k))));
   for (let it = 0; it < 20; it++) {
+    for (const g of S.angles) {
+      // угол в вершине b держится, если расстояние a–c равно значению из теоремы косинусов
+      const la = tlen.get(lkey(g.a, g.b)), lc = tlen.get(lkey(g.b, g.c));
+      if (!la || !lc) continue;
+      const target = Math.sqrt(Math.max(1e-12, la * la + lc * lc - 2 * la * lc * Math.cos(g.t)));
+      const a = S.points[g.a], c = S.points[g.c];
+      const wa = (a.a || pinned.has(a)) ? 0 : 1, wc = (c.a || pinned.has(c)) ? 0 : 1;
+      if (!wa && !wc) continue;
+      const dx = c.x - a.x, dy = c.y - a.y, dz = c.z - a.z;
+      const d = Math.hypot(dx, dy, dz) || 1e-9;
+      const f = (d - target) / d / (wa + wc);
+      a.x += dx * f * wa; a.y += dy * f * wa; a.z += dz * f * wa;
+      c.x -= dx * f * wc; c.y -= dy * f * wc; c.z -= dz * f * wc;
+    }
     for (const l of S.links) {
       const a = S.points[l.a], b = S.points[l.b];
       const wa = (a.a || pinned.has(a)) ? 0 : 1, wb = (b.a || pinned.has(b)) ? 0 : 1;
@@ -493,11 +558,21 @@ cv.addEventListener('pointerdown', e => {
     const i = hitPoint(mx, my, 5);
     const l = i < 0 ? hitLink(mx, my) : -1;
     const b = (i < 0 && l < 0) ? hitBox(mx, my) : -1;
+    if (i < 0 && l < 0 && b < 0) {   // пустое место: рамка (а если не тянули — просто снять выбор)
+      frame = { x0: mx, y0: my, x1: mx, y1: my, shift: e.shiftKey };
+      return;
+    }
     if (!e.shiftKey) { sel.points.clear(); sel.box = -1; }
     if (i >= 0) { sel.points.has(i) && e.shiftKey ? sel.points.delete(i) : sel.points.add(i); sel.box = -1; }
     else if (l >= 0) { sel.points.add(S.links[l].a); sel.points.add(S.links[l].b); sel.box = -1; }
     else if (b >= 0) { sel.points.clear(); sel.box = b; }
     updateGizmo();
+  } else if (tool === 'angle') {
+    const i = hitPoint(mx, my, 14);
+    if (i >= 0) {
+      if (S.angles.some(g => g.b === i)) releaseAngles([i]); else fixAngles([i]);
+      pushHist();
+    }
   } else if (tool === 'pull') {
     const i = hitPoint(mx, my, 16);
     if (i >= 0) {
@@ -511,13 +586,22 @@ cv.addEventListener('pointerdown', e => {
     const i = hitPoint(mx, my, 14);
     if (i >= 0) { erasePoint(i); updateGizmo(); pushHist(); return; }
     const l = hitLink(mx, my);
-    if (l >= 0) { S.links.splice(l, 1); pushHist(); return; }
+    if (l >= 0) { S.links.splice(l, 1); pruneAngles(); pushHist(); return; }
     const b = hitBox(mx, my);
     if (b >= 0) { S.boxes.splice(b, 1); sel.box = -1; rebuildBoxes(); updateGizmo(); pushHist(); }
   }
 });
+const frameEl = document.getElementById('frame');
+function showFrame() {
+  if (!frame) { frameEl.style.display = 'none'; return; }
+  const x = Math.min(frame.x0, frame.x1), y = Math.min(frame.y0, frame.y1);
+  frameEl.style.display = 'block';
+  frameEl.style.left = x + 'px'; frameEl.style.top = y + 'px';
+  frameEl.style.width = Math.abs(frame.x1 - frame.x0) + 'px'; frameEl.style.height = Math.abs(frame.y1 - frame.y0) + 'px';
+}
 cv.addEventListener('pointermove', e => {
   pos(e);
+  if (frame) { frame.x1 = mx; frame.y1 = my; showFrame(); return; }
   if (drawing) {
     const h = planePoint(drawing.plane); if (!h) return;
     const last = S.points[drawing.last];
@@ -539,6 +623,21 @@ cv.addEventListener('pointermove', e => {
 });
 function endPointer(e) {
   if (e) pos(e);
+  if (frame) {
+    const f = frame; frame = null; showFrame();
+    if (Math.hypot(f.x1 - f.x0, f.y1 - f.y0) < 4) {      // просто клик по пустому месту
+      if (!f.shift) { sel.points.clear(); sel.box = -1; updateGizmo(); }
+      return;
+    }
+    const xa = Math.min(f.x0, f.x1), xb = Math.max(f.x0, f.x1), ya = Math.min(f.y0, f.y1), yb = Math.max(f.y0, f.y1);
+    if (!f.shift) { sel.points.clear(); sel.box = -1; }
+    S.points.forEach((p, i) => {
+      const s = toScreen(p.x, p.y, p.z);
+      if (s.ok && s.x >= xa && s.x <= xb && s.y >= ya && s.y <= yb) sel.points.add(i);
+    });
+    updateGizmo();
+    return;
+  }
   if (drawing) {
     if (drawing.moved) {
       const j = hitPoint(mx, my, SNAP);
@@ -550,7 +649,7 @@ function endPointer(e) {
   }
 }
 cv.addEventListener('pointerup', endPointer);
-cv.addEventListener('pointercancel', () => { drawing = null; pullIdx = -1; });
+cv.addEventListener('pointercancel', () => { drawing = null; pullIdx = -1; frame = null; showFrame(); });
 cv.addEventListener('dblclick', e => {
   if (tool !== 'select') return;
   pos(e);
@@ -565,7 +664,8 @@ cv.addEventListener('dblclick', e => {
 const hints = {
   draw: 'Тяните левой кнопкой, чтобы нарисовать линию на плоскости. Конец рядом с точкой замыкает линию. Правая кнопка — вращать камеру.',
   anchor: 'Нажмите на точку — закрепить или отпустить.',
-  select: 'Нажмите на точку, линию или предмет — появится гизмо. Двойной щелчок — вся линия целиком. Shift — добавить к выбранным.',
+  select: 'Нажмите на точку, линию или предмет — появится гизмо. Тяните по пустому месту — рамка. Двойной щелчок — вся линия целиком. Shift — добавить к выбранным.',
+  angle: 'Нажмите на точку — зафиксировать углы между линиями, которые в ней сходятся (ещё раз — снять).',
   pull: 'Тяните точку левой кнопкой — она ведёт за собой всю линию.',
   erase: 'Нажмите на точку, линию или предмет — стереть.'
 };
@@ -630,6 +730,19 @@ function syncSpring() {
   springEl.value = v; springVal.textContent = (+v).toFixed(2);
 }
 
+// условия для выбранных точек (если ничего не выбрано — для всех)
+function selIdx() { return sel.points.size ? [...sel.points] : S.points.map((_, i) => i); }
+document.getElementById('anchorOn').addEventListener('click', () => {
+  selIdx().forEach(i => { const p = S.points[i]; if (p) { p.a = true; p.px = p.x; p.py = p.y; p.pz = p.z; p.f = null; } });
+  pushHist();
+});
+document.getElementById('anchorOff').addEventListener('click', () => {
+  selIdx().forEach(i => { const p = S.points[i]; if (p) { p.a = false; p.px = p.x; p.py = p.y; p.pz = p.z; } });
+  pushHist();
+});
+document.getElementById('angleOn').addEventListener('click', () => { fixAngles(selIdx()); pushHist(); });
+document.getElementById('angleOff').addEventListener('click', () => { releaseAngles(selIdx()); pushHist(); });
+
 ceilEl.addEventListener('change', () => { S.ceiling = ceilEl.checked; ceilMesh.visible = S.ceiling; pushHist(); });
 document.getElementById('addBox').addEventListener('click', () => {
   S.boxes.push({ x: 0, y: 0.35, z: 0, w: 1, h: 0.7, d: 1 });
@@ -650,7 +763,7 @@ function setPaused(v) {
 pauseBtn.addEventListener('click', () => setPaused(!paused));
 stepBtn.addEventListener('click', () => { if (paused) step(); });
 document.getElementById('clear').addEventListener('click', () => {
-  S.points = []; S.links = []; S.boxes = []; sel.points.clear(); sel.box = -1;
+  S.points = []; S.links = []; S.angles = []; S.boxes = []; sel.points.clear(); sel.box = -1;
   rebuildBoxes(); updateGizmo(); pushHist();
 });
 function view(pos, target) { camera.position.copy(pos); orbit.target.copy(target); orbit.update(); }
@@ -714,14 +827,16 @@ fileEl.addEventListener('change', () => {
     const ok = o && o.version === 2 && Array.isArray(o.points) && Array.isArray(o.links) &&
       o.points.every(p => fin(p.x) && fin(p.y) && fin(p.z)) &&
       o.links.every(l => Number.isInteger(l.a) && Number.isInteger(l.b) &&
-        l.a >= 0 && l.b >= 0 && l.a < o.points.length && l.b < o.points.length && fin(l.L));
+        l.a >= 0 && l.b >= 0 && l.a < o.points.length && l.b < o.points.length && fin(l.L)) &&
+      (o.angles === undefined || (Array.isArray(o.angles) && o.angles.every(g =>
+        [g.a, g.b, g.c].every(v => Number.isInteger(v) && v >= 0 && v < o.points.length) && fin(g.t))));
     if (!ok) throw new Error('bad');
     restore(o); pushHist();
   }).catch(() => alert('Не удалось открыть файл: это не 3D-файл Fizzik.'));
 });
 
 /* ---------- цикл ---------- */
-function frame() {
+function tick() {
   if (!paused && !drawing) step();
   if (!tcDragging && sel.points.size) centroid(pivot.position);
   syncBoxes();
@@ -742,13 +857,13 @@ function frame() {
   }
   updateVisuals();
   renderer.render(scene, camera);
-  requestAnimationFrame(frame);
+  requestAnimationFrame(tick);
 }
 
 setTool('draw');
 syncUI();
 pushHist();
-requestAnimationFrame(frame);
+requestAnimationFrame(tick);
 
 // для автопроверок
 window.__fizzik = {
