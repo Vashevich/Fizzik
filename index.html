@@ -85,11 +85,12 @@
 
     <fieldset><legend>Плоскость рисования</legend>
       <div class="row" id="planes">
-        <button data-plane="XY" class="on">XY</button>
+        <button data-plane="VIEW" class="on" title="перпендикулярно взгляду">Вид</button>
+        <button data-plane="XY">XY</button>
         <button data-plane="XZ">XZ</button>
         <button data-plane="YZ">YZ</button>
       </div>
-      <div class="note">Для «Рисовать» и «Точка». Плоскость проходит через центр обзора (точку, вокруг которой вращается камера). Потом двигайте нарисованное гизмо.</div>
+      <div class="note">Для «Рисовать» и «Точка». По умолчанию «Вид»: плоскость перпендикулярна взгляду, рисуете как на экране. XY / XZ / YZ — по желанию, чтобы рисовать строго в плоскости осей. Плоскость проходит через центр обзора (точку, вокруг которой вращается камера); пока тянете штрих, она не меняется.</div>
     </fieldset>
 
     <fieldset><legend>Нагрузка</legend>
@@ -174,6 +175,8 @@
       <div><i style="background:#4a463d"></i>точка без сил (стоит)</div>
       <div><i style="background:#7b3fa0"></i>угол зафиксирован, нагрузки нет</div>
       <div><i class="sq" style="background:#c8421f"></i>якорь</div>
+      <div><i style="background:#2f9e44"></i>пружина (линия изменена)</div>
+      <div style="font-size:11px;margin-top:2px">Несколько сил в узле — маленькие метки рядом</div>
       <div><i style="background:#e08a00"></i>выбрано</div>
     </div></div>
 </div>
@@ -258,7 +261,7 @@ const S = { points: [], links: [], angles: [], boxes: [], ceiling: false };
 let loadStrength = 1;   // сила, которая назначается при нажатии направления
 const sel = { points: new Set(), box: -1 };
 let tool = 'draw';
-let plane = 'XY';
+let plane = 'VIEW';   // VIEW — плоскость вида (перпендикулярно взгляду)
 let paused = false;
 let drawing = null;       // {last, plane, moved}
 let pullIdx = -1;
@@ -279,12 +282,13 @@ const matStd = () => new THREE.MeshStandardMaterial({ color: 0xffffff, roughness
 const pointMesh = new THREE.InstancedMesh(new THREE.SphereGeometry(1, 12, 8), matStd(), CAP);
 const anchorMesh = new THREE.InstancedMesh(new THREE.BoxGeometry(1, 1, 1), matStd(), CAP);
 const linkMesh = new THREE.InstancedMesh(new THREE.CylinderGeometry(1, 1, 1, 8, 1), matStd(), CAP);
-for (const m of [pointMesh, anchorMesh, linkMesh]) {
+const markMesh = new THREE.InstancedMesh(new THREE.SphereGeometry(1, 10, 6), matStd(), CAP * 4);   // метки сил у узла
+for (const m of [pointMesh, anchorMesh, linkMesh, markMesh]) {
   m.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
   m.frustumCulled = false; m.count = 0; scene.add(m);
 }
 const C = { point: new THREE.Color(0x4a463d), loaded: new THREE.Color(0x2b6cb0), angle: new THREE.Color(0x7b3fa0), anchor: new THREE.Color(0xc8421f), link: new THREE.Color(0x1d1b17),
-  spring: new THREE.Color(0xc8421f), sel: new THREE.Color(0xe08a00) };
+  spring: new THREE.Color(0x2f9e44), sel: new THREE.Color(0xe08a00) };
 const _m = new THREE.Matrix4(), _q = new THREE.Quaternion(), _p = new THREE.Vector3(),
   _s = new THREE.Vector3(), _d = new THREE.Vector3(), _up = new THREE.Vector3(0, 1, 0);
 
@@ -302,6 +306,30 @@ function updateVisuals() {
     }
   });
   pointMesh.count = np; anchorMesh.count = na;
+  // если в узле действует несколько сил — рядом с ним цветные метки, по одной на силу
+  const sprV = new Set();
+  for (const l of S.links) if (l.k !== 0) { sprV.add(l.a); sprV.add(l.b); }
+  const e = camera.matrixWorld.elements;   // правый и верхний векторы камеры: метки всегда видны «плоско»
+  const rx = e[0], ry = e[1], rz = e[2], ux = e[4], uy = e[5], uz = e[6];
+  let nm = 0;
+  S.points.forEach((p, i) => {
+    const fs = [];
+    if (p.a) fs.push(C.anchor);
+    if (p.f && p.f.s > 0) fs.push(C.loaded);
+    if (angV.has(i)) fs.push(C.angle);
+    if (sprV.has(i)) fs.push(C.spring);
+    if (fs.length < 2) return;
+    const d = p.a ? 0.11 : 0.07;
+    fs.forEach((c, k) => {
+      const t = Math.PI * 0.75 - k * Math.PI / 2.6;   // сверху слева по часовой
+      const cx = Math.cos(t) * d, cy = Math.sin(t) * d;
+      _m.compose(_p.set(p.x + rx * cx + ux * cy, p.y + ry * cx + uy * cy, p.z + rz * cx + uz * cy), _q.identity(), _s.set(0.022, 0.022, 0.022));
+      markMesh.setMatrixAt(nm, _m); markMesh.setColorAt(nm, c); nm++;
+    });
+  });
+  markMesh.count = nm;
+  markMesh.instanceMatrix.needsUpdate = true;
+  if (markMesh.instanceColor) markMesh.instanceColor.needsUpdate = true;
   let nl = 0;
   for (const l of S.links) {
     const a = S.points[l.a], b = S.points[l.b];
@@ -519,8 +547,11 @@ function planeCenter(out) {
   if (snapOn) out.set(sn(out.x), sn(out.y), sn(out.z));
   return out;
 }
+function planeNormal(name, out = new THREE.Vector3()) {
+  return name === 'VIEW' ? camera.getWorldDirection(out).negate() : out.set(...NORMALS[name]);
+}
 function drawPlane(name) {
-  const n = new THREE.Vector3(...NORMALS[name]);
+  const n = planeNormal(name);
   return new THREE.Plane(n, -n.dot(planeCenter(new THREE.Vector3())));
 }
 function snapV(v) { return snapOn ? v.set(sn(v.x), sn(v.y), sn(v.z)) : v; }
@@ -701,7 +732,7 @@ cv.addEventListener('pointerdown', e => {
       if (i < 0) i = addPoint(h.x, h.y, h.z);
     }
     if (i < 0) return;
-    drawing = { last: i, plane: pl, moved: false, touched: new Set([i]) };
+    drawing = { last: i, plane: pl, planeName: plane, moved: false, touched: new Set([i]) };
   } else if (tool === 'point') {
     const h = planePoint(drawPlane(plane)); if (!h) return;
     snapV(h);
@@ -1058,11 +1089,15 @@ function tick() {
   guide.visible = onPlane;
   gridHelper.visible = onPlane && snapOn;
   if (onPlane) {
-    const n = new THREE.Vector3(...NORMALS[plane]);
+    const n = planeNormal(drawing ? drawing.planeName : plane);
     planeCenter(guide.position);
+    if (drawing) guide.position.copy(drawing.plane.projectPoint(guide.position, _p));
     guide.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), n);
     gridHelper.position.copy(guide.position);
-    gridHelper.rotation.set(plane === 'XY' ? Math.PI / 2 : 0, 0, plane === 'YZ' ? Math.PI / 2 : 0);
+    // сетка: для «Вида» — та плоскость осей, что ближе всего к взгляду
+    let gp = plane;
+    if (gp === 'VIEW') { const ax = Math.abs(n.x), ay = Math.abs(n.y), az = Math.abs(n.z); gp = az >= ax && az >= ay ? 'XY' : (ay >= ax ? 'XZ' : 'YZ'); }
+    gridHelper.rotation.set(gp === 'XY' ? Math.PI / 2 : 0, 0, gp === 'YZ' ? Math.PI / 2 : 0);
   }
   // стрелка нагрузки у выбранных точек
   const fp = sel.points.size ? [...sel.points].map(i => S.points[i]).find(p => p && p.f && p.f.s > 0) : null;
@@ -1084,7 +1119,7 @@ pushHist();
 requestAnimationFrame(tick);
 
 // для автопроверок
-window.__fizzik = { get rigid() { return rigid; },
+window.__fizzik = { get rigid() { return rigid; }, get marks() { return markMesh.count; },
   S, sel, tc, pivot, camera, orbit, step, serialize, restore, pushHist,
   project: (x, y, z) => { const s = toScreen(x, y, z); return { x: s.x, y: s.y, ok: s.ok }; },
   size: () => ({ W, H })
