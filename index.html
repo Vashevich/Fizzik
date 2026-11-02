@@ -52,6 +52,8 @@
     <fieldset class="tools"><legend>Инструмент</legend>
       <div class="row" id="tools">
         <button data-tool="draw" class="on">Рисовать</button>
+        <button data-tool="point">Точка</button>
+        <button data-tool="connect">Соединить</button>
         <button data-tool="anchor">Якорь</button>
         <button data-tool="select">Выбрать</button>
         <button data-tool="pull">Тянуть</button>
@@ -60,13 +62,26 @@
       </div>
     </fieldset>
 
+    <fieldset><legend>Сетка</legend>
+      <div class="chk"><input type="checkbox" id="snap" checked> <label for="snap">Привязка к 3D-сетке (G)</label></div>
+      <label class="sl" style="margin-top:6px">Шаг сетки
+        <select id="snapStep" style="float:right">
+          <option value="0.1">0.1 м</option>
+          <option value="0.25">0.25 м</option>
+          <option value="0.5" selected>0.5 м</option>
+          <option value="1">1 м</option>
+        </select></label>
+      <div style="clear:both"></div>
+      <div class="note">Точки, рисование и гизмо встают в узлы сетки. Сетка видна на плоскости рисования.</div>
+    </fieldset>
+
     <fieldset><legend>Плоскость рисования</legend>
       <div class="row" id="planes">
         <button data-plane="XY" class="on">XY</button>
         <button data-plane="XZ">XZ</button>
         <button data-plane="YZ">YZ</button>
       </div>
-      <div class="note">Рисуем на плоскости, которая проходит через центр обзора (точку, вокруг которой вращается камера). Потом двигайте нарисованное гизмо.</div>
+      <div class="note">Для «Рисовать» и «Точка». Плоскость проходит через центр обзора (точку, вокруг которой вращается камера). Потом двигайте нарисованное гизмо.</div>
     </fieldset>
 
     <fieldset><legend>Нагрузка</legend>
@@ -199,6 +214,21 @@ const guide = new THREE.Mesh(new THREE.PlaneGeometry(8, 8),
   new THREE.MeshBasicMaterial({ color: 0xc8421f, transparent: true, opacity: 0.07, side: THREE.DoubleSide, depthWrite: false }));
 scene.add(guide);
 
+// сетка на плоскости рисования (с привязкой) и резинка для «Соединить»
+let gridHelper = null;
+function rebuildGrid() {
+  if (gridHelper) { scene.remove(gridHelper); gridHelper.geometry.dispose(); gridHelper.material.dispose(); }
+  const size = 8;
+  gridHelper = new THREE.GridHelper(size, Math.round(size / snapStep), 0xc8421f, 0xe2a99a);
+  gridHelper.material.transparent = true; gridHelper.material.opacity = 0.45;
+  gridHelper.material.depthWrite = false;
+  scene.add(gridHelper);
+}
+const rubber = new THREE.Line(
+  new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3()]),
+  new THREE.LineBasicMaterial({ color: 0xc8421f }));
+rubber.frustumCulled = false; rubber.visible = false; scene.add(rubber);
+
 // стрелка нагрузки
 const arrow = new THREE.ArrowHelper(new THREE.Vector3(0, -1, 0), new THREE.Vector3(0, 0, 0), 0.7, 0x2b6cb0, 0.18, 0.1);
 arrow.visible = false;
@@ -216,6 +246,8 @@ let paused = false;
 let drawing = null;       // {last, plane, moved}
 let pullIdx = -1;
 let frame = null;         // рамка выделения {x0,y0,x1,y1,shift}
+let connectFrom = -1;     // «Соединить»: первая выбранная точка
+let snapOn = true, snapStep = 0.5;   // привязка к 3D-сетке
 const pullTarget = new THREE.Vector3();
 let pullPlane = null;
 let tcDragging = false;
@@ -242,7 +274,7 @@ function updateVisuals() {
   let np = 0, na = 0;
   const angV = new Set(S.angles.map(g => g.b));
   S.points.forEach((p, i) => {
-    const sl = sel.points.has(i);
+    const sl = sel.points.has(i) || i === connectFrom;
     if (p.a) {
       _m.compose(_p.set(p.x, p.y, p.z), _q.identity(), _s.set(0.09, 0.09, 0.09));
       anchorMesh.setMatrixAt(na, _m); anchorMesh.setColorAt(na, sl ? C.sel : C.anchor); na++;
@@ -460,9 +492,20 @@ function component(i) {
   return seen;
 }
 const NORMALS = { XY: [0, 0, 1], XZ: [0, 1, 0], YZ: [1, 0, 0] };
+const sn = v => { const r = Math.round(v / snapStep) * snapStep; return Object.is(r, -0) ? 0 : +r.toFixed(6); };
+// центр плоскости рисования: точка обзора, а с привязкой — ближайший узел сетки
+function planeCenter(out) {
+  out.copy(orbit.target);
+  if (snapOn) out.set(sn(out.x), sn(out.y), sn(out.z));
+  return out;
+}
 function drawPlane(name) {
   const n = new THREE.Vector3(...NORMALS[name]);
-  return new THREE.Plane(n, -n.dot(orbit.target));
+  return new THREE.Plane(n, -n.dot(planeCenter(new THREE.Vector3())));
+}
+function snapV(v) { return snapOn ? v.set(sn(v.x), sn(v.y), sn(v.z)) : v; }
+function pointAt(x, y, z) {   // уже есть точка в этом месте?
+  return S.points.findIndex(p => Math.abs(p.x - x) < 1e-6 && Math.abs(p.y - y) < 1e-6 && Math.abs(p.z - z) < 1e-6);
 }
 
 /* ---------- физика (Верле, 3D) ---------- */
@@ -548,9 +591,29 @@ cv.addEventListener('pointerdown', e => {
   if (tool === 'draw') {
     const pl = drawPlane(plane);
     let i = hitPoint(mx, my, SNAP);
-    if (i < 0) { const h = planePoint(pl); if (!h) return; i = addPoint(h.x, h.y, h.z); }
+    if (i < 0) {
+      const h = planePoint(pl); if (!h) return;
+      snapV(h);
+      i = pointAt(h.x, h.y, h.z);
+      if (i < 0) i = addPoint(h.x, h.y, h.z);
+    }
     if (i < 0) return;
     drawing = { last: i, plane: pl, moved: false };
+  } else if (tool === 'point') {
+    const h = planePoint(drawPlane(plane)); if (!h) return;
+    snapV(h);
+    if (pointAt(h.x, h.y, h.z) < 0 && addPoint(h.x, h.y, h.z) >= 0) pushHist();
+  } else if (tool === 'connect') {
+    const i = hitPoint(mx, my, 14);
+    if (i < 0) { connectFrom = -1; return; }
+    if (connectFrom < 0) connectFrom = i;
+    else if (i === connectFrom) connectFrom = -1;
+    else {
+      const before = S.links.length;
+      addLink(connectFrom, i);
+      connectFrom = -1;
+      if (S.links.length > before) pushHist();
+    }
   } else if (tool === 'anchor') {
     const i = hitPoint(mx, my, 14);
     if (i >= 0) { const p = S.points[i]; p.a = !p.a; p.px = p.x; p.py = p.y; p.pz = p.z; pushHist(); }
@@ -591,6 +654,17 @@ cv.addEventListener('pointerdown', e => {
     if (b >= 0) { S.boxes.splice(b, 1); sel.box = -1; rebuildBoxes(); updateGizmo(); pushHist(); }
   }
 });
+function updateRubber() {
+  if (connectFrom < 0 || !S.points[connectFrom]) { rubber.visible = false; return; }
+  const a = S.points[connectFrom];
+  let bx = a.x, by = a.y, bz = a.z;
+  const j = hitPoint(mx, my, 14);
+  if (j >= 0 && j !== connectFrom) { const q = S.points[j]; bx = q.x; by = q.y; bz = q.z; }
+  else { const h = planePoint(drawPlane(plane)); if (h) { snapV(h); bx = h.x; by = h.y; bz = h.z; } }
+  const pos3 = rubber.geometry.attributes.position;
+  pos3.setXYZ(0, a.x, a.y, a.z); pos3.setXYZ(1, bx, by, bz); pos3.needsUpdate = true;
+  rubber.visible = true;
+}
 const frameEl = document.getElementById('frame');
 function showFrame() {
   if (!frame) { frameEl.style.display = 'none'; return; }
@@ -602,11 +676,16 @@ function showFrame() {
 cv.addEventListener('pointermove', e => {
   pos(e);
   if (frame) { frame.x1 = mx; frame.y1 = my; showFrame(); return; }
+  if (connectFrom >= 0) updateRubber();
   if (drawing) {
     const h = planePoint(drawing.plane); if (!h) return;
+    snapV(h);
     const last = S.points[drawing.last];
-    if (Math.hypot(h.x - last.x, h.y - last.y, h.z - last.z) >= STEP) {
-      const n = addPoint(h.x, h.y, h.z); if (n < 0) return;
+    const dist = Math.hypot(h.x - last.x, h.y - last.y, h.z - last.z);
+    if (snapOn ? dist > 1e-6 : dist >= STEP) {
+      let n = snapOn ? pointAt(h.x, h.y, h.z) : -1;       // в узле уже есть точка — берём её
+      if (n < 0) n = addPoint(h.x, h.y, h.z);
+      if (n < 0) return;
       addLink(drawing.last, n);
       drawing.last = n; drawing.moved = true;
     }
@@ -663,6 +742,8 @@ cv.addEventListener('dblclick', e => {
 /* ---------- интерфейс ---------- */
 const hints = {
   draw: 'Тяните левой кнопкой, чтобы нарисовать линию на плоскости. Конец рядом с точкой замыкает линию. Правая кнопка — вращать камеру.',
+  point: 'Нажмите на плоскости рисования — поставить точку (с привязкой — в узел сетки).',
+  connect: 'Нажмите на первую точку, затем на вторую — между ними появится линия. Esc — отмена.',
   anchor: 'Нажмите на точку — закрепить или отпустить.',
   select: 'Нажмите на точку, линию или предмет — появится гизмо. Тяните по пустому месту — рамка. Двойной щелчок — вся линия целиком. Shift — добавить к выбранным.',
   angle: 'Нажмите на точку — зафиксировать углы между линиями, которые в ней сходятся (ещё раз — снять).',
@@ -670,7 +751,7 @@ const hints = {
   erase: 'Нажмите на точку, линию или предмет — стереть.'
 };
 function setTool(t) {
-  tool = t;
+  tool = t; connectFrom = -1; rubber.visible = false;
   document.querySelectorAll('#tools button').forEach(b => b.classList.toggle('on', b.dataset.tool === t));
   cv.style.cursor = t === 'pull' ? 'grab' : 'crosshair';
   hintEl.textContent = hints[t];
@@ -680,6 +761,15 @@ document.querySelectorAll('#planes button').forEach(b => b.addEventListener('cli
   plane = b.dataset.plane;
   document.querySelectorAll('#planes button').forEach(x => x.classList.toggle('on', x === b));
 }));
+
+const snapEl = document.getElementById('snap'), snapStepEl = document.getElementById('snapStep');
+function applySnap() {
+  snapOn = snapEl.checked; snapStep = +snapStepEl.value;
+  tc.setTranslationSnap(snapOn ? snapStep : null);   // гизмо тоже двигает по узлам
+  rebuildGrid();
+}
+snapEl.addEventListener('change', applySnap);
+snapStepEl.addEventListener('change', applySnap);
 
 const loadEl = document.getElementById('load'), loadVal = document.getElementById('loadVal');
 const springEl = document.getElementById('spring'), springVal = document.getElementById('springVal');
@@ -775,7 +865,9 @@ function syncUI() { syncLoad(); ceilEl.checked = S.ceiling; ceilMesh.visible = S
 window.addEventListener('keydown', e => {
   if (document.activeElement && document.activeElement.tagName === 'INPUT') return;
   const k = e.key.toLowerCase();
-  if (e.code === 'Space') { e.preventDefault(); if (document.activeElement && document.activeElement.tagName === 'BUTTON') document.activeElement.blur(); setPaused(!paused); }
+  if (e.key === 'Escape') { connectFrom = -1; rubber.visible = false; if (frame) { frame = null; showFrame(); } }
+  else if (k === 'g' && !e.ctrlKey && !e.metaKey) { snapEl.checked = !snapEl.checked; applySnap(); }
+  else if (e.code === 'Space') { e.preventDefault(); if (document.activeElement && document.activeElement.tagName === 'BUTTON') document.activeElement.blur(); setPaused(!paused); }
   else if ((e.ctrlKey || e.metaKey) && k === 'z' && !e.shiftKey) { e.preventDefault(); undo(); }
   else if ((e.ctrlKey || e.metaKey) && (k === 'y' || (k === 'z' && e.shiftKey))) { e.preventDefault(); redo(); }
   else if (k === 'delete' || k === 'backspace') {
@@ -809,11 +901,11 @@ document.getElementById('expObj').addEventListener('click', () => {
 
 document.getElementById('expPng').addEventListener('click', () => {
   // без гизмо и подсказки плоскости
-  const g = guide.visible, h = tc.getHelper().visible;
-  guide.visible = false; tc.getHelper().visible = false;
+  const g = guide.visible, h = tc.getHelper().visible, gr = gridHelper.visible, rb = rubber.visible;
+  guide.visible = false; tc.getHelper().visible = false; gridHelper.visible = false; rubber.visible = false;
   renderer.render(scene, camera);
   cv.toBlob(b => { download('fizzik.png', b); }, 'image/png');
-  guide.visible = g; tc.getHelper().visible = h;
+  guide.visible = g; tc.getHelper().visible = h; gridHelper.visible = gr; rubber.visible = rb;
 });
 
 const fileEl = document.getElementById('file');
@@ -841,11 +933,15 @@ function tick() {
   if (!tcDragging && sel.points.size) centroid(pivot.position);
   syncBoxes();
   // плоскость рисования и стрелка нагрузки
-  guide.visible = tool === 'draw';
-  if (guide.visible) {
+  const onPlane = tool === 'draw' || tool === 'point' || tool === 'connect';
+  guide.visible = onPlane;
+  gridHelper.visible = onPlane && snapOn;
+  if (onPlane) {
     const n = new THREE.Vector3(...NORMALS[plane]);
+    planeCenter(guide.position);
     guide.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), n);
-    guide.position.copy(orbit.target);
+    gridHelper.position.copy(guide.position);
+    gridHelper.rotation.set(plane === 'XY' ? Math.PI / 2 : 0, 0, plane === 'YZ' ? Math.PI / 2 : 0);
   }
   // стрелка нагрузки у выбранных точек
   const fp = sel.points.size ? [...sel.points].map(i => S.points[i]).find(p => p && p.f && p.f.s > 0) : null;
@@ -861,6 +957,7 @@ function tick() {
 }
 
 setTool('draw');
+applySnap();
 syncUI();
 pushHist();
 requestAnimationFrame(tick);
