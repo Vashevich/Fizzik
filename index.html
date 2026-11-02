@@ -31,6 +31,9 @@
   #frame{position:absolute;border:1px dashed var(--acc);background:rgba(200,66,31,.08);pointer-events:none;display:none}
   #pauseBadge{position:absolute;left:50%;top:12px;transform:translateX(-50%);background:var(--ink);color:#fff;border-radius:6px;padding:6px 12px;font-size:12px;font-weight:600;letter-spacing:.03em;pointer-events:none;display:none}
   body.paused #pauseBadge{display:block}
+  #legend{position:absolute;right:12px;top:12px;background:rgba(251,250,246,.92);border:1px solid var(--line);border-radius:6px;padding:6px 10px;font-size:12px;color:var(--mute);pointer-events:none;line-height:1.7}
+  #legend i{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:6px;vertical-align:-1px}
+  #legend i.sq{border-radius:1px}
   #hint{position:absolute;left:12px;bottom:10px;background:rgba(251,250,246,.92);border:1px solid var(--line);border-radius:6px;padding:5px 9px;font-size:12px;color:var(--mute);pointer-events:none;max-width:70%}
 </style>
 <script type="importmap">
@@ -62,8 +65,9 @@
       </div>
     </fieldset>
 
-    <fieldset><legend>Углы при рисовании</legend>
-      <div class="chk"><input type="checkbox" id="autoAngle" checked> <label for="autoAngle">Фиксировать углы автоматически</label></div>
+    <fieldset><legend>Новые фигуры</legend>
+      <div class="chk"><input type="checkbox" id="autoLoad" checked> <label for="autoLoad">Сразу с гравитацией (падают вниз)</label></div>
+      <div class="chk" style="margin-top:4px"><input type="checkbox" id="autoAngle" checked> <label for="autoAngle">Фиксировать углы автоматически</label></div>
     </fieldset>
 
     <fieldset><legend>Сетка</legend>
@@ -164,7 +168,14 @@
       <div class="note">JSON хранит всё, чтобы продолжить работу. OBJ и PNG — текущий вид (после провисания).</div>
     </fieldset>
   </div>
-  <div id="stage"><canvas id="c"></canvas><div id="frame"></div><div id="pauseBadge">ПАУЗА · расчёт стоит, можно рисовать и менять силы</div><div id="hint"></div></div>
+  <div id="stage"><canvas id="c"></canvas><div id="frame"></div><div id="pauseBadge">ПАУЗА · расчёт стоит, можно рисовать и менять силы</div><div id="hint"></div>
+    <div id="legend">
+      <div><i style="background:#2b6cb0"></i>точка с нагрузкой (падает)</div>
+      <div><i style="background:#4a463d"></i>точка без сил (стоит)</div>
+      <div><i style="background:#7b3fa0"></i>угол зафиксирован, нагрузки нет</div>
+      <div><i class="sq" style="background:#c8421f"></i>якорь</div>
+      <div><i style="background:#e08a00"></i>выбрано</div>
+    </div></div>
 </div>
 
 <script type="module">
@@ -253,7 +264,7 @@ let drawing = null;       // {last, plane, moved}
 let pullIdx = -1;
 let frame = null;         // рамка выделения {x0,y0,x1,y1,shift}
 let connectFrom = -1;     // «Соединить»: первая выбранная точка
-let autoAngle = true;   // «Рисовать» и «Соединить» сразу фиксируют углы
+let autoAngle = true, autoLoad = true;   // новые точки сразу получают нагрузку вниз   // «Рисовать» и «Соединить» сразу фиксируют углы
 let snapOn = true, snapStep = 0.5;   // привязка к 3D-сетке
 const pullTarget = new THREE.Vector3();
 let pullPlane = null;
@@ -448,7 +459,7 @@ function hitBox(mx, my) {
 }
 function addPoint(x, y, z) {
   if (S.points.length >= CAP) return -1;
-  S.points.push({ x, y, z, px: x, py: y, pz: z, a: false, f: null });
+  S.points.push({ x, y, z, px: x, py: y, pz: z, a: false, f: autoLoad ? { dx: 0, dy: -1, dz: 0, s: loadStrength || 1 } : null });
   return S.points.length - 1;
 }
 function linked(a, b) { return S.links.some(l => (l.a === a && l.b === b) || (l.a === b && l.b === a)); }
@@ -859,12 +870,14 @@ document.querySelectorAll('#planes button').forEach(b => b.addEventListener('cli
 const snapEl = document.getElementById('snap'), snapStepEl = document.getElementById('snapStep');
 function applySnap() {
   autoAngle = document.getElementById('autoAngle').checked;
+  autoLoad = document.getElementById('autoLoad').checked;
   snapOn = snapEl.checked; snapStep = +snapStepEl.value;
   tc.setTranslationSnap(snapOn ? snapStep : null);   // гизмо тоже двигает по узлам
   rebuildGrid();
 }
 snapEl.addEventListener('change', applySnap);
 document.getElementById('autoAngle').addEventListener('change', applySnap);
+document.getElementById('autoLoad').addEventListener('change', applySnap);
 snapStepEl.addEventListener('change', applySnap);
 
 const loadEl = document.getElementById('load'), loadVal = document.getElementById('loadVal');
