@@ -5,11 +5,11 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Fizzik</title>
 <style>
-  :root{--bg:#f4f1ea;--panel:#fbfaf6;--ink:#1d1b17;--mute:#7a756a;--line:#d9d3c4;--acc:#c8421f;--sel:#e08a00}
+  :root{--bg:#f4f1ea;--panel:#fbfaf6;--ink:#1d1b17;--mute:#7a756a;--line:#d9d3c4;--acc:#c8421f}
   *{box-sizing:border-box}
   html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);font:14px/1.35 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
   #app{display:flex;height:100%}
-  #panel{width:248px;flex:none;background:var(--panel);border-right:1px solid var(--line);padding:12px;overflow:auto}
+  #panel{width:256px;flex:none;background:var(--panel);border-right:1px solid var(--line);padding:12px;overflow:auto}
   #panel h1{font-size:17px;margin:0 0 2px}
   #panel .sub{color:var(--mute);font-size:12px;margin-bottom:10px}
   fieldset{border:1px solid var(--line);border-radius:8px;margin:0 0 10px;padding:8px 10px 10px}
@@ -27,15 +27,18 @@
   .note{font-size:12px;color:var(--mute);margin:6px 0 0}
   .chk{display:flex;gap:8px;align-items:center;margin:2px 0}
   #stage{flex:1;position:relative;overflow:hidden;min-width:0}
-  canvas{position:absolute;inset:0;touch-action:none;cursor:crosshair}
-  #hint{position:absolute;left:12px;bottom:10px;background:rgba(251,250,246,.92);border:1px solid var(--line);border-radius:6px;padding:5px 9px;font-size:12px;color:var(--mute);pointer-events:none}
+  canvas{position:absolute;inset:0;display:block;touch-action:none}
+  #hint{position:absolute;left:12px;bottom:10px;background:rgba(251,250,246,.92);border:1px solid var(--line);border-radius:6px;padding:5px 9px;font-size:12px;color:var(--mute);pointer-events:none;max-width:70%}
 </style>
+<script type="importmap">
+{"imports":{"three":"./lib/three.module.js","three/addons/":"./lib/"}}
+</script>
 </head>
 <body>
 <div id="app">
   <div id="panel">
     <h1>Fizzik</h1>
-    <div class="sub">Рисовалка с физикой · Rock Parametric</div>
+    <div class="sub">Рисовалка с физикой в 3D · Rock Parametric</div>
 
     <fieldset class="tools"><legend>Инструмент</legend>
       <div class="row" id="tools">
@@ -47,29 +50,41 @@
       </div>
     </fieldset>
 
+    <fieldset><legend>Плоскость рисования</legend>
+      <div class="row" id="planes">
+        <button data-plane="XY" class="on">XY</button>
+        <button data-plane="XZ">XZ</button>
+        <button data-plane="YZ">YZ</button>
+      </div>
+      <div class="note">Рисуем на плоскости, которая проходит через центр обзора (точку, вокруг которой вращается камера). Потом двигайте нарисованное гизмо.</div>
+    </fieldset>
+
     <fieldset><legend>Нагрузка</legend>
       <div class="row" id="dirs">
-        <button data-dx="0" data-dy="1" class="on" title="вниз">↓</button>
-        <button data-dx="0" data-dy="-1" title="вверх">↑</button>
-        <button data-dx="-1" data-dy="0" title="влево">←</button>
-        <button data-dx="1" data-dy="0" title="вправо">→</button>
+        <button data-d="0,-1,0" title="вниз (−Y), гравитация">↓ вниз</button>
+        <button data-d="0,1,0" title="вверх (+Y)">↑ вверх</button>
+        <button data-d="-1,0,0" title="−X">−X</button>
+        <button data-d="1,0,0" title="+X">+X</button>
+        <button data-d="0,0,-1" title="−Z">−Z</button>
+        <button data-d="0,0,1" title="+Z">+Z</button>
       </div>
       <label class="sl">Сила <b id="loadVal">1.00</b>
         <input type="range" id="load" min="0" max="2" step="0.05" value="1"></label>
-      <div class="note">По умолчанию вниз (гравитация). 0 — нагрузки нет.</div>
+      <div class="row" style="margin-top:6px"><button id="loadOff">Снять нагрузку</button></div>
+      <div class="note">Нарисованное стоит на месте. Выберите точки (инструмент «Выбрать») и нажмите направление — они начнут двигаться. Если ничего не выбрано, нагрузка назначается всем. Точки с нагрузкой синие.</div>
     </fieldset>
 
     <fieldset><legend>Пружина</legend>
       <label class="sl">Длина линии <b id="springVal">0.00</b>
         <input type="range" id="spring" min="-1" max="1" step="0.05" value="0"></label>
-      <div class="note">0 — как нарисовано, 1 — вдвое длиннее, −1 — вдвое короче. Действует на выбранные линии (инструмент «Выбрать»), если ничего не выбрано — на все.</div>
+      <div class="note">0 — как нарисовано, 1 — вдвое длиннее, −1 — вдвое короче. Действует на выбранные линии; если ничего не выбрано — на все.</div>
     </fieldset>
 
     <fieldset><legend>Коллизия</legend>
       <div class="chk"><input type="checkbox" checked disabled> <span>Пол (всегда)</span></div>
-      <div class="chk"><input type="checkbox" id="ceil"> <span>Потолок</span></div>
+      <div class="chk"><input type="checkbox" id="ceil"> <span>Потолок (3 м)</span></div>
       <div class="row" style="margin-top:6px"><button id="addBox">+ Предмет</button></div>
-      <div class="note">Предмет — прямоугольник, его можно двигать инструментом «Тянуть».</div>
+      <div class="note">Предмет — параллелепипед. Двигается гизмо: выберите его инструментом «Выбрать».</div>
     </fieldset>
 
     <fieldset><legend>История</legend>
@@ -81,6 +96,15 @@
         <button id="pause">Пауза</button>
         <button id="clear">Очистить</button>
       </div>
+    </fieldset>
+
+    <fieldset><legend>Вид</legend>
+      <div class="row">
+        <button id="vFront">Спереди</button>
+        <button id="vTop">Сверху</button>
+        <button id="vReset">Сброс</button>
+      </div>
+      <div class="note">Правая кнопка — вращать, колесо — приблизить, средняя — сдвинуть.</div>
     </fieldset>
 
     <fieldset><legend>Выгрузка</legend>
@@ -97,61 +121,171 @@
   <div id="stage"><canvas id="c"></canvas><div id="hint"></div></div>
 </div>
 
-<script>
-(() => {
-'use strict';
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from './lib/OrbitControls.js';
+import { TransformControls } from './lib/TransformControls.js';
 
 const stage = document.getElementById('stage');
 const cv = document.getElementById('c');
-const ctx = cv.getContext('2d');
 const hintEl = document.getElementById('hint');
 
-let W = 0, H = 0, dpr = 1;
+/* ---------- сцена ---------- */
+const renderer = new THREE.WebGLRenderer({ canvas: cv, antialias: true, preserveDrawingBuffer: true });
+renderer.setClearColor(0xfbfaf6);
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(50, 1, 0.05, 300);
+const HOME = { pos: new THREE.Vector3(4, 2.6, 6.5), target: new THREE.Vector3(0, 1.2, 0) };
+camera.position.copy(HOME.pos);
+
+const orbit = new OrbitControls(camera, cv);
+orbit.target.copy(HOME.target);
+orbit.mouseButtons = { LEFT: -1, MIDDLE: THREE.MOUSE.PAN, RIGHT: THREE.MOUSE.ROTATE };
+orbit.update();
+
+let W = 1, H = 1;
 function resize() {
   const r = stage.getBoundingClientRect();
-  dpr = window.devicePixelRatio || 1;
-  W = r.width; H = r.height;
-  cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr);
-  cv.style.width = W + 'px'; cv.style.height = H + 'px';
-  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  W = Math.max(1, r.width); H = Math.max(1, r.height);
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+  renderer.setSize(W, H);
+  camera.aspect = W / H; camera.updateProjectionMatrix();
 }
-window.addEventListener('resize', resize);
+new ResizeObserver(resize).observe(stage);
 resize();
 
-const floorY = () => H - 40;
-const ceilY = () => 40;
+scene.add(new THREE.HemisphereLight(0xffffff, 0xd8d0bc, 1.1));
+const sun = new THREE.DirectionalLight(0xffffff, 1.3); sun.position.set(3, 6, 4); scene.add(sun);
+
+const CEIL = 3;       // высота потолка, м
+const HALF = 20;      // половина стороны пола, м (стены по краю)
+
+const floor = new THREE.Mesh(new THREE.PlaneGeometry(HALF * 2, HALF * 2).rotateX(-Math.PI / 2),
+  new THREE.MeshBasicMaterial({ color: 0xe6dfcd }));
+floor.position.y = -0.002; scene.add(floor);
+const grid = new THREE.GridHelper(HALF * 2, HALF * 2, 0x8a8472, 0xcfc8b4);
+grid.position.y = 0.001; scene.add(grid);
+const ceilMesh = new THREE.Mesh(new THREE.PlaneGeometry(HALF * 2, HALF * 2).rotateX(Math.PI / 2),
+  new THREE.MeshBasicMaterial({ color: 0x1d1b17, transparent: true, opacity: 0.06, side: THREE.DoubleSide }));
+ceilMesh.position.y = CEIL; ceilMesh.visible = false; scene.add(ceilMesh);
+
+// подсказка: плоскость рисования
+const guide = new THREE.Mesh(new THREE.PlaneGeometry(8, 8),
+  new THREE.MeshBasicMaterial({ color: 0xc8421f, transparent: true, opacity: 0.07, side: THREE.DoubleSide, depthWrite: false }));
+scene.add(guide);
+
+// стрелка нагрузки
+const arrow = new THREE.ArrowHelper(new THREE.Vector3(0, -1, 0), new THREE.Vector3(0, 0, 0), 0.7, 0x2b6cb0, 0.18, 0.1);
+arrow.visible = false;
+scene.add(arrow);
 
 /* ---------- состояние ---------- */
-let S = { points: [], links: [], boxes: [], load: { dx: 0, dy: 1, s: 1 }, ceiling: false };
-let sel = new Set();      // выбранные линии
+// у точки: f — назначенная нагрузка {dx,dy,dz,s} или null (тогда точка стоит на месте)
+const S = { points: [], links: [], boxes: [], ceiling: false };
+let loadStrength = 1;   // сила, которая назначается при нажатии направления
+const sel = { points: new Set(), box: -1 };
 let tool = 'draw';
+let plane = 'XY';
 let paused = false;
-let drawing = null;       // {last, start}
-let dragging = null;      // {type:'p'|'b', i, ox, oy}
-const mouse = { x: 0, y: 0 };
+let drawing = null;       // {last, plane, moved}
+let pullIdx = -1;
+const pullTarget = new THREE.Vector3();
+let pullPlane = null;
+let tcDragging = false;
 
-const STEP = 18;          // шаг между точками при рисовании
-const SNAP = 12;
+const STEP = 0.15;        // шаг между точками при рисовании, м
+const SNAP = 12;          // px
+const CAP = 8000;
+
+/* ---------- инстансы для отрисовки ---------- */
+const matStd = () => new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.55, metalness: 0 });
+const pointMesh = new THREE.InstancedMesh(new THREE.SphereGeometry(1, 12, 8), matStd(), CAP);
+const anchorMesh = new THREE.InstancedMesh(new THREE.BoxGeometry(1, 1, 1), matStd(), CAP);
+const linkMesh = new THREE.InstancedMesh(new THREE.CylinderGeometry(1, 1, 1, 8, 1), matStd(), CAP);
+for (const m of [pointMesh, anchorMesh, linkMesh]) {
+  m.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+  m.frustumCulled = false; m.count = 0; scene.add(m);
+}
+const C = { point: new THREE.Color(0x4a463d), loaded: new THREE.Color(0x2b6cb0), anchor: new THREE.Color(0xc8421f), link: new THREE.Color(0x1d1b17),
+  spring: new THREE.Color(0xc8421f), sel: new THREE.Color(0xe08a00) };
+const _m = new THREE.Matrix4(), _q = new THREE.Quaternion(), _p = new THREE.Vector3(),
+  _s = new THREE.Vector3(), _d = new THREE.Vector3(), _up = new THREE.Vector3(0, 1, 0);
+
+function updateVisuals() {
+  let np = 0, na = 0;
+  S.points.forEach((p, i) => {
+    const sl = sel.points.has(i);
+    if (p.a) {
+      _m.compose(_p.set(p.x, p.y, p.z), _q.identity(), _s.set(0.09, 0.09, 0.09));
+      anchorMesh.setMatrixAt(na, _m); anchorMesh.setColorAt(na, sl ? C.sel : C.anchor); na++;
+    } else {
+      _m.compose(_p.set(p.x, p.y, p.z), _q.identity(), _s.set(0.035, 0.035, 0.035));
+      pointMesh.setMatrixAt(np, _m); pointMesh.setColorAt(np, sl ? C.sel : (p.f ? C.loaded : C.point)); np++;
+    }
+  });
+  pointMesh.count = np; anchorMesh.count = na;
+  let nl = 0;
+  for (const l of S.links) {
+    const a = S.points[l.a], b = S.points[l.b];
+    _d.set(b.x - a.x, b.y - a.y, b.z - a.z);
+    const len = _d.length() || 1e-6; _d.divideScalar(len);
+    _q.setFromUnitVectors(_up, _d);
+    _p.set((a.x + b.x) / 2, (a.y + b.y) / 2, (a.z + b.z) / 2);
+    _m.compose(_p, _q, _s.set(0.012, len, 0.012));
+    linkMesh.setMatrixAt(nl, _m);
+    const sl = sel.points.has(l.a) && sel.points.has(l.b);
+    linkMesh.setColorAt(nl, sl ? C.sel : (l.k !== 0 ? C.spring : C.link));
+    nl++;
+  }
+  linkMesh.count = nl;
+  for (const m of [pointMesh, anchorMesh, linkMesh]) {
+    m.instanceMatrix.needsUpdate = true;
+    if (m.instanceColor) m.instanceColor.needsUpdate = true;
+  }
+}
+
+/* ---------- предметы ---------- */
+let boxMeshes = [];
+function rebuildBoxes() {
+  for (const m of boxMeshes) { scene.remove(m); m.traverse(o => { if (o.geometry) o.geometry.dispose(); }); }
+  boxMeshes = S.boxes.map((b, i) => {
+    const mesh = new THREE.Mesh(new THREE.BoxGeometry(b.w, b.h, b.d),
+      new THREE.MeshStandardMaterial({ color: 0xd3cbb5, roughness: 0.8 }));
+    mesh.add(new THREE.LineSegments(new THREE.EdgesGeometry(mesh.geometry), new THREE.LineBasicMaterial({ color: 0x1d1b17 })));
+    mesh.userData.i = i;
+    mesh.position.set(b.x, b.y, b.z);
+    scene.add(mesh);
+    return mesh;
+  });
+}
+function syncBoxes() {
+  boxMeshes.forEach((m, i) => {
+    const b = S.boxes[i];
+    if (tcDragging && tc.object === m) return;
+    m.position.set(b.x, b.y, b.z);
+  });
+}
 
 /* ---------- история (шаг = действие пользователя) ---------- */
 let hist = [], hi = -1;
+const r4 = v => +v.toFixed(4);
 function serialize() {
   return JSON.stringify({
-    app: 'Fizzik', version: 1,
-    points: S.points.map(p => ({ x: +p.x.toFixed(2), y: +p.y.toFixed(2), a: p.a ? 1 : 0 })),
-    links: S.links.map(l => ({ a: l.a, b: l.b, L: +l.L.toFixed(3), k: l.k })),
-    boxes: S.boxes.map(b => ({ x: b.x, y: b.y, w: b.w, h: b.h })),
-    load: S.load, ceiling: S.ceiling
+    app: 'Fizzik', version: 2,
+    points: S.points.map(p => ({ x: r4(p.x), y: r4(p.y), z: r4(p.z), a: p.a ? 1 : 0, f: p.f ? { dx: p.f.dx, dy: p.f.dy, dz: p.f.dz, s: p.f.s } : null })),
+    links: S.links.map(l => ({ a: l.a, b: l.b, L: r4(l.L), k: l.k })),
+    boxes: S.boxes.map(b => ({ x: r4(b.x), y: r4(b.y), z: r4(b.z), w: b.w, h: b.h, d: b.d })),
+    ceiling: S.ceiling
   });
 }
 function restore(o) {
-  S.points = o.points.map(p => ({ x: p.x, y: p.y, px: p.x, py: p.y, a: !!p.a }));
+  S.points = o.points.map(p => ({ x: p.x, y: p.y, z: p.z, px: p.x, py: p.y, pz: p.z, a: !!p.a,
+    f: p.f && Number.isFinite(p.f.s) ? { dx: +p.f.dx || 0, dy: +p.f.dy || 0, dz: +p.f.dz || 0, s: p.f.s } : null }));
   S.links = o.links.map(l => ({ a: l.a, b: l.b, L: l.L, k: l.k || 0 }));
-  S.boxes = (o.boxes || []).map(b => ({ x: b.x, y: b.y, w: b.w, h: b.h }));
-  S.load = o.load || { dx: 0, dy: 1, s: 1 };
+  S.boxes = (o.boxes || []).map(b => ({ x: b.x, y: b.y, z: b.z, w: b.w, h: b.h, d: b.d }));
   S.ceiling = !!o.ceiling;
-  sel.clear();
-  syncUI();
+  sel.points.clear(); sel.box = -1;
+  rebuildBoxes(); updateGizmo(); syncUI();
 }
 function pushHist() {
   hist = hist.slice(0, hi + 1);
@@ -167,241 +301,258 @@ function updHist() {
   document.getElementById('redo').disabled = hi >= hist.length - 1;
 }
 
-/* ---------- геометрия ---------- */
-function hitPoint(x, y, r) {
+/* ---------- гизмо ---------- */
+const pivot = new THREE.Object3D(); scene.add(pivot);
+const lastPivot = new THREE.Vector3();
+const tc = new TransformControls(camera, cv);
+tc.setSize(0.9);
+scene.add(tc.getHelper());
+tc.addEventListener('dragging-changed', e => {
+  orbit.enabled = !e.value;
+  tcDragging = e.value;
+  if (e.value) lastPivot.copy(pivot.position);
+  else pushHist();
+});
+tc.addEventListener('objectChange', () => {
+  if (tc.object === pivot) {
+    const dx = pivot.position.x - lastPivot.x, dy = pivot.position.y - lastPivot.y, dz = pivot.position.z - lastPivot.z;
+    for (const i of sel.points) {
+      const p = S.points[i]; if (!p) continue;
+      p.x += dx; p.y += dy; p.z += dz; p.px = p.x; p.py = p.y; p.pz = p.z;
+    }
+    lastPivot.copy(pivot.position);
+  } else if (sel.box >= 0 && boxMeshes[sel.box] === tc.object) {
+    const m = tc.object, b = S.boxes[sel.box];
+    b.x = m.position.x; b.y = m.position.y; b.z = m.position.z;
+  }
+});
+function centroid(out) {
+  out.set(0, 0, 0);
+  for (const i of sel.points) { const p = S.points[i]; out.x += p.x; out.y += p.y; out.z += p.z; }
+  return out.divideScalar(sel.points.size || 1);
+}
+function updateGizmo() {
+  if (sel.points.size) { centroid(pivot.position); lastPivot.copy(pivot.position); tc.attach(pivot); }
+  else if (sel.box >= 0 && boxMeshes[sel.box]) tc.attach(boxMeshes[sel.box]);
+  else tc.detach();
+  syncSpring(); syncLoad();
+}
+
+/* ---------- геометрия и выбор ---------- */
+const _v = new THREE.Vector3();
+function toScreen(x, y, z) {
+  _v.set(x, y, z).project(camera);
+  return { x: (_v.x + 1) / 2 * W, y: (1 - _v.y) / 2 * H, ok: _v.z > -1 && _v.z < 1 };
+}
+function hitPoint(mx, my, r) {
   let best = -1, bd = r * r;
   S.points.forEach((p, i) => {
-    const d = (p.x - x) ** 2 + (p.y - y) ** 2;
+    const s = toScreen(p.x, p.y, p.z); if (!s.ok) return;
+    const d = (s.x - mx) ** 2 + (s.y - my) ** 2;
     if (d <= bd) { bd = d; best = i; }
   });
   return best;
 }
-function hitLink(x, y) {
+function hitLink(mx, my) {
   let best = -1, bd = 8;
   S.links.forEach((l, i) => {
     const a = S.points[l.a], b = S.points[l.b];
-    const dx = b.x - a.x, dy = b.y - a.y;
-    const len2 = dx * dx + dy * dy || 1;
-    let t = ((x - a.x) * dx + (y - a.y) * dy) / len2;
+    const sa = toScreen(a.x, a.y, a.z), sb = toScreen(b.x, b.y, b.z);
+    if (!sa.ok || !sb.ok) return;
+    const dx = sb.x - sa.x, dy = sb.y - sa.y, len2 = dx * dx + dy * dy || 1;
+    let t = ((mx - sa.x) * dx + (my - sa.y) * dy) / len2;
     t = Math.max(0, Math.min(1, t));
-    const d = Math.hypot(a.x + t * dx - x, a.y + t * dy - y);
+    const d = Math.hypot(sa.x + t * dx - mx, sa.y + t * dy - my);
     if (d < bd) { bd = d; best = i; }
   });
   return best;
 }
-function hitBox(x, y) {
-  for (let i = S.boxes.length - 1; i >= 0; i--) {
-    const b = S.boxes[i];
-    if (x >= b.x && x <= b.x + b.w && y >= b.y && y <= b.y + b.h) return i;
-  }
-  return -1;
+const ray = new THREE.Raycaster();
+const ndc = new THREE.Vector2();
+function setRay(mx, my) { ndc.set(mx / W * 2 - 1, -(my / H) * 2 + 1); ray.setFromCamera(ndc, camera); }
+function hitBox(mx, my) {
+  setRay(mx, my);
+  const h = ray.intersectObjects(boxMeshes, false);
+  return h.length ? h[0].object.userData.i : -1;
 }
-function addPoint(x, y) { S.points.push({ x, y, px: x, py: y, a: false }); return S.points.length - 1; }
+function addPoint(x, y, z) {
+  if (S.points.length >= CAP) return -1;
+  S.points.push({ x, y, z, px: x, py: y, pz: z, a: false, f: null });
+  return S.points.length - 1;
+}
 function linked(a, b) { return S.links.some(l => (l.a === a && l.b === b) || (l.a === b && l.b === a)); }
 function addLink(a, b) {
-  if (a === b || linked(a, b)) return;
+  if (a === b || a < 0 || b < 0 || linked(a, b)) return;
   const pa = S.points[a], pb = S.points[b];
-  S.links.push({ a, b, L: Math.hypot(pb.x - pa.x, pb.y - pa.y), k: 0 });
+  S.links.push({ a, b, L: Math.hypot(pb.x - pa.x, pb.y - pa.y, pb.z - pa.z), k: 0 });
 }
 function erasePoint(i) {
   S.links = S.links.filter(l => l.a !== i && l.b !== i);
   S.links.forEach(l => { if (l.a > i) l.a--; if (l.b > i) l.b--; });
   S.points.splice(i, 1);
-  sel.clear();
+  sel.points.clear();
+}
+function component(i) {
+  const seen = new Set([i]), q = [i];
+  while (q.length) {
+    const c = q.pop();
+    for (const l of S.links) {
+      const n = l.a === c ? l.b : (l.b === c ? l.a : -1);
+      if (n >= 0 && !seen.has(n)) { seen.add(n); q.push(n); }
+    }
+  }
+  return seen;
+}
+const NORMALS = { XY: [0, 0, 1], XZ: [0, 1, 0], YZ: [1, 0, 0] };
+function drawPlane(name) {
+  const n = new THREE.Vector3(...NORMALS[name]);
+  return new THREE.Plane(n, -n.dot(orbit.target));
 }
 
-/* ---------- физика (Верле) ---------- */
+/* ---------- физика (Верле, 3D) ---------- */
 function step() {
-  const g = 0.45 * S.load.s;
-  const ax = S.load.dx * g, ay = S.load.dy * g;
-  const pinned = dragging && dragging.type === 'p' ? S.points[dragging.i] : null;
+  const pinned = new Set();
+  if (tcDragging) for (const i of sel.points) if (S.points[i]) pinned.add(S.points[i]);
+  if (pullIdx >= 0 && S.points[pullIdx]) pinned.add(S.points[pullIdx]);
 
   for (const p of S.points) {
-    if (p.a || p === pinned) continue;
-    let vx = (p.x - p.px) * 0.995, vy = (p.y - p.py) * 0.995;
-    const v = Math.hypot(vx, vy);
-    if (v > 40) { vx *= 40 / v; vy *= 40 / v; }
-    p.px = p.x; p.py = p.y;
-    p.x += vx + ax; p.y += vy + ay;
+    if (p.a || pinned.has(p)) continue;
+    let vx = (p.x - p.px) * 0.995, vy = (p.y - p.py) * 0.995, vz = (p.z - p.pz) * 0.995;
+    const v = Math.hypot(vx, vy, vz);
+    if (v > 0.4) { const f = 0.4 / v; vx *= f; vy *= f; vz *= f; }
+    p.px = p.x; p.py = p.y; p.pz = p.z;
+    p.x += vx; p.y += vy; p.z += vz;
+    if (p.f) { const g = 0.0045 * p.f.s; p.x += p.f.dx * g; p.y += p.f.dy * g; p.z += p.f.dz * g; }
   }
-  if (pinned) { pinned.x = pinned.px = mouse.x; pinned.y = pinned.py = mouse.y; }
-
+  if (pullIdx >= 0 && S.points[pullIdx]) {
+    const p = S.points[pullIdx];
+    p.x = p.px = pullTarget.x; p.y = p.py = pullTarget.y; p.z = p.pz = pullTarget.z;
+  }
   for (let it = 0; it < 20; it++) {
     for (const l of S.links) {
       const a = S.points[l.a], b = S.points[l.b];
-      const wa = (a.a || a === pinned) ? 0 : 1, wb = (b.a || b === pinned) ? 0 : 1;
+      const wa = (a.a || pinned.has(a)) ? 0 : 1, wb = (b.a || pinned.has(b)) ? 0 : 1;
       if (!wa && !wb) continue;
-      const dx = b.x - a.x, dy = b.y - a.y;
-      const d = Math.hypot(dx, dy) || 1e-6;
+      const dx = b.x - a.x, dy = b.y - a.y, dz = b.z - a.z;
+      const d = Math.hypot(dx, dy, dz) || 1e-9;
       const target = l.L * Math.pow(2, Math.max(-1, Math.min(1, l.k)));
       const f = (d - target) / d / (wa + wb);
-      a.x += dx * f * wa; a.y += dy * f * wa;
-      b.x -= dx * f * wb; b.y -= dy * f * wb;
+      a.x += dx * f * wa; a.y += dy * f * wa; a.z += dz * f * wa;
+      b.x -= dx * f * wb; b.y -= dy * f * wb; b.z -= dz * f * wb;
     }
-    for (const p of S.points) { if (!p.a && p !== pinned) collide(p); }
+    for (const p of S.points) if (!p.a && !pinned.has(p)) collide(p);
   }
 }
+function rub(p) { p.px += (p.x - p.px) * 0.3; p.pz += (p.z - p.pz) * 0.3; }
 function collide(p) {
-  const f = floorY();
-  if (p.y > f) { p.y = f; p.px += (p.x - p.px) * 0.3; }
-  if (S.ceiling && p.y < ceilY()) { p.y = ceilY(); p.px += (p.x - p.px) * 0.3; }
+  if (p.y < 0) { p.y = 0; rub(p); }
+  if (S.ceiling && p.y > CEIL) p.y = CEIL;
+  if (p.x > HALF) p.x = HALF; else if (p.x < -HALF) p.x = -HALF;
+  if (p.z > HALF) p.z = HALF; else if (p.z < -HALF) p.z = -HALF;
   for (const b of S.boxes) {
-    if (p.x > b.x && p.x < b.x + b.w && p.y > b.y && p.y < b.y + b.h) {
-      const dl = p.x - b.x, dr = b.x + b.w - p.x, dt = p.y - b.y, db = b.y + b.h - p.y;
-      const m = Math.min(dl, dr, dt, db);
-      if (m === dt) { p.y = b.y; p.px += (p.x - p.px) * 0.3; }
-      else if (m === db) p.y = b.y + b.h;
-      else if (m === dl) p.x = b.x;
-      else p.x = b.x + b.w;
+    const x0 = b.x - b.w / 2, x1 = b.x + b.w / 2, y0 = b.y - b.h / 2, y1 = b.y + b.h / 2, z0 = b.z - b.d / 2, z1 = b.z + b.d / 2;
+    if (p.x > x0 && p.x < x1 && p.y > y0 && p.y < y1 && p.z > z0 && p.z < z1) {
+      const c = [p.x - x0, x1 - p.x, p.y - y0, y1 - p.y, p.z - z0, z1 - p.z];
+      let m = 0; for (let i = 1; i < 6; i++) if (c[i] < c[m]) m = i;
+      if (m === 0) p.x = x0; else if (m === 1) p.x = x1;
+      else if (m === 2) p.y = y0; else if (m === 3) { p.y = y1; rub(p); }
+      else if (m === 4) p.z = z0; else p.z = z1;
     }
   }
 }
 
-/* ---------- отрисовка ---------- */
-function render() {
-  ctx.clearRect(0, 0, W, H);
-  ctx.fillStyle = '#fbfaf6'; ctx.fillRect(0, 0, W, H);
+/* ---------- ввод мыши ---------- */
+let mx = 0, my = 0;
+function pos(e) { const r = cv.getBoundingClientRect(); mx = e.clientX - r.left; my = e.clientY - r.top; }
+const _hit = new THREE.Vector3();
+function planePoint(pl) { setRay(mx, my); return ray.ray.intersectPlane(pl, _hit) ? _hit : null; }
 
-  // сетка
-  ctx.strokeStyle = '#eee9dc'; ctx.lineWidth = 1; ctx.beginPath();
-  for (let x = 0; x < W; x += 40) { ctx.moveTo(x + .5, 0); ctx.lineTo(x + .5, H); }
-  for (let y = 0; y < H; y += 40) { ctx.moveTo(0, y + .5); ctx.lineTo(W, y + .5); }
-  ctx.stroke();
-
-  // пол и потолок
-  ctx.fillStyle = '#e6dfcd'; ctx.fillRect(0, floorY(), W, H - floorY());
-  ctx.strokeStyle = '#1d1b17'; ctx.lineWidth = 2;
-  ctx.beginPath(); ctx.moveTo(0, floorY()); ctx.lineTo(W, floorY()); ctx.stroke();
-  if (S.ceiling) {
-    ctx.fillStyle = '#e6dfcd'; ctx.fillRect(0, 0, W, ceilY());
-    ctx.beginPath(); ctx.moveTo(0, ceilY()); ctx.lineTo(W, ceilY()); ctx.stroke();
-  }
-
-  // предметы
-  for (const b of S.boxes) {
-    ctx.fillStyle = '#d3cbb5'; ctx.fillRect(b.x, b.y, b.w, b.h);
-    ctx.strokeStyle = '#1d1b17'; ctx.lineWidth = 2; ctx.strokeRect(b.x, b.y, b.w, b.h);
-  }
-
-  // линии
-  S.links.forEach((l, i) => {
-    const a = S.points[l.a], b = S.points[l.b];
-    const s = sel.has(i);
-    ctx.strokeStyle = s ? '#e08a00' : (l.k !== 0 ? '#c8421f' : '#1d1b17');
-    ctx.lineWidth = s ? 4 : 2.5;
-    ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
-  });
-
-  // точки
-  for (const p of S.points) {
-    if (p.a) {
-      ctx.fillStyle = '#c8421f'; ctx.fillRect(p.x - 6, p.y - 6, 12, 12);
-      ctx.strokeStyle = '#fff'; ctx.lineWidth = 1.5; ctx.strokeRect(p.x - 6, p.y - 6, 12, 12);
-    } else {
-      ctx.fillStyle = '#fff'; ctx.strokeStyle = '#1d1b17'; ctx.lineWidth = 2;
-      ctx.beginPath(); ctx.arc(p.x, p.y, 3.5, 0, 6.2832); ctx.fill(); ctx.stroke();
-    }
-  }
-
-  // стрелка нагрузки
-  if (S.load.s > 0) {
-    const cx = W - 50, cy = 50, len = 14 + 22 * S.load.s;
-    const ex = cx + S.load.dx * len, ey = cy + S.load.dy * len;
-    ctx.strokeStyle = '#c8421f'; ctx.fillStyle = '#c8421f'; ctx.lineWidth = 3;
-    ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(ex, ey); ctx.stroke();
-    const ang = Math.atan2(S.load.dy, S.load.dx);
-    ctx.beginPath(); ctx.moveTo(ex, ey);
-    ctx.lineTo(ex - 9 * Math.cos(ang - .45), ey - 9 * Math.sin(ang - .45));
-    ctx.lineTo(ex - 9 * Math.cos(ang + .45), ey - 9 * Math.sin(ang + .45));
-    ctx.closePath(); ctx.fill();
-  }
-  if (paused) {
-    ctx.fillStyle = 'rgba(29,27,23,.8)'; ctx.font = '600 13px system-ui';
-    ctx.fillText('ПАУЗА', 14, 24);
-  }
-}
-
-function loop() {
-  if (!paused && !drawing) step();
-  render();
-  requestAnimationFrame(loop);
-}
-
-/* ---------- мышь ---------- */
-function pos(e) {
-  const r = cv.getBoundingClientRect();
-  mouse.x = e.clientX - r.left; mouse.y = e.clientY - r.top;
-}
 cv.addEventListener('pointerdown', e => {
-  pos(e); cv.setPointerCapture(e.pointerId);
-  const x = mouse.x, y = mouse.y;
+  if (e.button !== 0) return;
+  if (tc.dragging || tc.axis !== null) return;   // кликнули по гизмо
+  pos(e);
+  cv.setPointerCapture(e.pointerId);
 
   if (tool === 'draw') {
-    let i = hitPoint(x, y, SNAP);
-    if (i < 0) i = addPoint(x, y);
-    drawing = { last: i, start: i, moved: false };
+    const pl = drawPlane(plane);
+    let i = hitPoint(mx, my, SNAP);
+    if (i < 0) { const h = planePoint(pl); if (!h) return; i = addPoint(h.x, h.y, h.z); }
+    if (i < 0) return;
+    drawing = { last: i, plane: pl, moved: false };
   } else if (tool === 'anchor') {
-    const i = hitPoint(x, y, 14);
-    if (i >= 0) { S.points[i].a = !S.points[i].a; S.points[i].px = S.points[i].x; S.points[i].py = S.points[i].y; pushHist(); }
+    const i = hitPoint(mx, my, 14);
+    if (i >= 0) { const p = S.points[i]; p.a = !p.a; p.px = p.x; p.py = p.y; p.pz = p.z; pushHist(); }
   } else if (tool === 'select') {
-    const i = hitLink(x, y);
-    if (i < 0) { if (!e.shiftKey) sel.clear(); }
-    else if (e.shiftKey) { sel.has(i) ? sel.delete(i) : sel.add(i); }
-    else { sel.clear(); sel.add(i); }
-    syncSpring();
+    const i = hitPoint(mx, my, 5);
+    const l = i < 0 ? hitLink(mx, my) : -1;
+    const b = (i < 0 && l < 0) ? hitBox(mx, my) : -1;
+    if (!e.shiftKey) { sel.points.clear(); sel.box = -1; }
+    if (i >= 0) { sel.points.has(i) && e.shiftKey ? sel.points.delete(i) : sel.points.add(i); sel.box = -1; }
+    else if (l >= 0) { sel.points.add(S.links[l].a); sel.points.add(S.links[l].b); sel.box = -1; }
+    else if (b >= 0) { sel.points.clear(); sel.box = b; }
+    updateGizmo();
   } else if (tool === 'pull') {
-    const i = hitPoint(x, y, 16);
-    if (i >= 0) dragging = { type: 'p', i };
-    else {
-      const b = hitBox(x, y);
-      if (b >= 0) dragging = { type: 'b', i: b, ox: x - S.boxes[b].x, oy: y - S.boxes[b].y };
+    const i = hitPoint(mx, my, 16);
+    if (i >= 0) {
+      pullIdx = i;
+      const p = S.points[i];
+      const dir = camera.getWorldDirection(new THREE.Vector3());
+      pullPlane = new THREE.Plane().setFromNormalAndCoplanarPoint(dir, new THREE.Vector3(p.x, p.y, p.z));
+      pullTarget.set(p.x, p.y, p.z);
     }
   } else if (tool === 'erase') {
-    const i = hitPoint(x, y, 14);
-    if (i >= 0) { erasePoint(i); pushHist(); return; }
-    const l = hitLink(x, y);
-    if (l >= 0) { S.links.splice(l, 1); sel.clear(); pushHist(); return; }
-    const b = hitBox(x, y);
-    if (b >= 0) { S.boxes.splice(b, 1); pushHist(); }
+    const i = hitPoint(mx, my, 14);
+    if (i >= 0) { erasePoint(i); updateGizmo(); pushHist(); return; }
+    const l = hitLink(mx, my);
+    if (l >= 0) { S.links.splice(l, 1); pushHist(); return; }
+    const b = hitBox(mx, my);
+    if (b >= 0) { S.boxes.splice(b, 1); sel.box = -1; rebuildBoxes(); updateGizmo(); pushHist(); }
   }
 });
 cv.addEventListener('pointermove', e => {
   pos(e);
   if (drawing) {
+    const h = planePoint(drawing.plane); if (!h) return;
     const last = S.points[drawing.last];
-    if (Math.hypot(mouse.x - last.x, mouse.y - last.y) >= STEP) {
-      const n = addPoint(mouse.x, mouse.y);
+    if (Math.hypot(h.x - last.x, h.y - last.y, h.z - last.z) >= STEP) {
+      const n = addPoint(h.x, h.y, h.z); if (n < 0) return;
       addLink(drawing.last, n);
       drawing.last = n; drawing.moved = true;
     }
-  } else if (dragging && dragging.type === 'b') {
-    const b = S.boxes[dragging.i];
-    b.x = mouse.x - dragging.ox; b.y = mouse.y - dragging.oy;
+  } else if (pullIdx >= 0 && pullPlane) {
+    const h = planePoint(pullPlane); if (h) pullTarget.copy(h);
   }
 });
 function endPointer(e) {
   if (e) pos(e);
   if (drawing) {
     if (drawing.moved) {
-      const j = hitPoint(mouse.x, mouse.y, SNAP);
+      const j = hitPoint(mx, my, SNAP);
       if (j >= 0 && j !== drawing.last) addLink(drawing.last, j);
     }
-    drawing = null;
-    pushHist();
-  } else if (dragging) {
-    dragging = null;
-    pushHist();
+    drawing = null; pushHist();
+  } else if (pullIdx >= 0) {
+    pullIdx = -1; pullPlane = null; pushHist();
   }
 }
 cv.addEventListener('pointerup', endPointer);
-cv.addEventListener('pointercancel', () => { drawing = null; dragging = null; });
+cv.addEventListener('pointercancel', () => { drawing = null; pullIdx = -1; });
+cv.addEventListener('dblclick', e => {
+  if (tool !== 'select') return;
+  pos(e);
+  let i = hitPoint(mx, my, 12);
+  if (i < 0) { const l = hitLink(mx, my); if (l >= 0) i = S.links[l].a; }
+  if (i < 0) return;
+  sel.box = -1; sel.points = component(i);
+  updateGizmo();
+});
 
 /* ---------- интерфейс ---------- */
 const hints = {
-  draw: 'Тяните мышью, чтобы нарисовать линию. Конец рядом с точкой замыкает линию.',
+  draw: 'Тяните левой кнопкой, чтобы нарисовать линию на плоскости. Конец рядом с точкой замыкает линию. Правая кнопка — вращать камеру.',
   anchor: 'Нажмите на точку — закрепить или отпустить.',
-  select: 'Нажмите на линию, чтобы выбрать (Shift — добавить). Потом двигайте «Пружину».',
-  pull: 'Тяните точку или предмет мышью.',
+  select: 'Нажмите на точку, линию или предмет — появится гизмо. Двойной щелчок — вся линия целиком. Shift — добавить к выбранным.',
+  pull: 'Тяните точку левой кнопкой — она ведёт за собой всю линию.',
   erase: 'Нажмите на точку, линию или предмет — стереть.'
 };
 function setTool(t) {
@@ -411,40 +562,64 @@ function setTool(t) {
   hintEl.textContent = hints[t];
 }
 document.querySelectorAll('#tools button').forEach(b => b.addEventListener('click', () => setTool(b.dataset.tool)));
+document.querySelectorAll('#planes button').forEach(b => b.addEventListener('click', () => {
+  plane = b.dataset.plane;
+  document.querySelectorAll('#planes button').forEach(x => x.classList.toggle('on', x === b));
+}));
 
 const loadEl = document.getElementById('load'), loadVal = document.getElementById('loadVal');
 const springEl = document.getElementById('spring'), springVal = document.getElementById('springVal');
 const ceilEl = document.getElementById('ceil');
 
+// кому назначается нагрузка: выбранным точкам, а если ничего не выбрано — всем
+function loadTargets() { return sel.points.size ? [...sel.points].map(i => S.points[i]).filter(Boolean) : S.points; }
 document.querySelectorAll('#dirs button').forEach(b => b.addEventListener('click', () => {
-  S.load.dx = +b.dataset.dx; S.load.dy = +b.dataset.dy;
+  const [x, y, z] = b.dataset.d.split(',').map(Number);
+  loadTargets().forEach(p => { if (!p.a) p.f = { dx: x, dy: y, dz: z, s: loadStrength }; });
   syncLoad(); pushHist();
 }));
-loadEl.addEventListener('input', () => { S.load.s = +loadEl.value; syncLoad(); });
+loadEl.addEventListener('input', () => {
+  loadStrength = +loadEl.value;
+  loadTargets().forEach(p => { if (p.f) p.f.s = loadStrength; });
+  loadVal.textContent = loadStrength.toFixed(2);
+});
 loadEl.addEventListener('change', pushHist);
+document.getElementById('loadOff').addEventListener('click', () => {
+  loadTargets().forEach(p => { p.f = null; });
+  syncLoad(); pushHist();
+});
 function syncLoad() {
-  loadEl.value = S.load.s; loadVal.textContent = (+S.load.s).toFixed(2);
-  document.querySelectorAll('#dirs button').forEach(b =>
-    b.classList.toggle('on', +b.dataset.dx === S.load.dx && +b.dataset.dy === S.load.dy));
+  const first = loadTargets().find(p => p.f);
+  if (first && sel.points.size) loadStrength = first.f.s;
+  loadEl.value = loadStrength; loadVal.textContent = (+loadStrength).toFixed(2);
+  document.querySelectorAll('#dirs button').forEach(b => {
+    const [x, y, z] = b.dataset.d.split(',').map(Number);
+    b.classList.toggle('on', !!first && sel.points.size > 0 && first.f.dx === x && first.f.dy === y && first.f.dz === z);
+  });
 }
 
+// кому достаётся значение пружины
+function springTargets() {
+  if (sel.points.size === 0) return S.links;
+  if (sel.points.size === 1) { const i = [...sel.points][0]; return S.links.filter(l => l.a === i || l.b === i); }
+  return S.links.filter(l => sel.points.has(l.a) && sel.points.has(l.b));
+}
 springEl.addEventListener('input', () => {
   const v = +springEl.value;
   springVal.textContent = v.toFixed(2);
-  const idx = sel.size ? [...sel] : S.links.map((_, i) => i);
-  idx.forEach(i => { if (S.links[i]) S.links[i].k = v; });
+  springTargets().forEach(l => { l.k = v; });
 });
 springEl.addEventListener('change', pushHist);
 function syncSpring() {
-  let v = 0;
-  if (sel.size) v = S.links[[...sel][0]].k;
+  const t = sel.points.size ? springTargets() : [];
+  const v = t.length ? t[0].k : 0;
   springEl.value = v; springVal.textContent = (+v).toFixed(2);
 }
 
-ceilEl.addEventListener('change', () => { S.ceiling = ceilEl.checked; pushHist(); });
+ceilEl.addEventListener('change', () => { S.ceiling = ceilEl.checked; ceilMesh.visible = S.ceiling; pushHist(); });
 document.getElementById('addBox').addEventListener('click', () => {
-  S.boxes.push({ x: W / 2 - 60, y: floorY() - 80, w: 120, h: 80 });
-  pushHist();
+  S.boxes.push({ x: 0, y: 0.35, z: 0, w: 1, h: 0.7, d: 1 });
+  rebuildBoxes(); pushHist();
 });
 document.getElementById('undo').addEventListener('click', undo);
 document.getElementById('redo').addEventListener('click', redo);
@@ -452,17 +627,26 @@ document.getElementById('pause').addEventListener('click', e => {
   paused = !paused; e.target.classList.toggle('on', paused); e.target.textContent = paused ? 'Продолжить' : 'Пауза';
 });
 document.getElementById('clear').addEventListener('click', () => {
-  S.points = []; S.links = []; S.boxes = []; sel.clear(); pushHist();
+  S.points = []; S.links = []; S.boxes = []; sel.points.clear(); sel.box = -1;
+  rebuildBoxes(); updateGizmo(); pushHist();
 });
-function syncUI() { syncLoad(); ceilEl.checked = S.ceiling; syncSpring(); }
+function view(pos, target) { camera.position.copy(pos); orbit.target.copy(target); orbit.update(); }
+document.getElementById('vFront').addEventListener('click', () => view(new THREE.Vector3(0, 1.2, 8), new THREE.Vector3(0, 1.2, 0)));
+document.getElementById('vTop').addEventListener('click', () => view(new THREE.Vector3(0.001, 10, 0.001), new THREE.Vector3(0, 0, 0)));
+document.getElementById('vReset').addEventListener('click', () => view(HOME.pos, HOME.target));
+function syncUI() { syncLoad(); ceilEl.checked = S.ceiling; ceilMesh.visible = S.ceiling; syncSpring(); }
 
 window.addEventListener('keydown', e => {
+  if (document.activeElement && document.activeElement.tagName === 'INPUT') return;
   const k = e.key.toLowerCase();
   if ((e.ctrlKey || e.metaKey) && k === 'z' && !e.shiftKey) { e.preventDefault(); undo(); }
   else if ((e.ctrlKey || e.metaKey) && (k === 'y' || (k === 'z' && e.shiftKey))) { e.preventDefault(); redo(); }
   else if (k === 'delete' || k === 'backspace') {
-    if (sel.size && document.activeElement.tagName !== 'INPUT') {
-      S.links = S.links.filter((_, i) => !sel.has(i)); sel.clear(); pushHist();
+    if (sel.points.size) {
+      [...sel.points].sort((a, b) => b - a).forEach(erasePoint);
+      sel.points.clear(); updateGizmo(); pushHist();
+    } else if (sel.box >= 0) {
+      S.boxes.splice(sel.box, 1); sel.box = -1; rebuildBoxes(); updateGizmo(); pushHist();
     }
   }
 });
@@ -478,9 +662,8 @@ document.getElementById('expJson').addEventListener('click', () =>
   download('fizzik.json', new Blob([serialize()], { type: 'application/json' })));
 
 document.getElementById('expObj').addEventListener('click', () => {
-  const k = 100; // 100 px = 1 единица
-  let s = '# Fizzik: линии и точки (положение после провисания)\n# 1 единица = 100 px, ось Y вверх, Z = 0\no fizzik\n';
-  S.points.forEach(p => { s += `v ${(p.x / k).toFixed(4)} ${((floorY() - p.y) / k).toFixed(4)} 0\n`; });
+  let s = '# Fizzik: линии и точки (положение после провисания)\n# 1 единица = 1 м, ось Y вверх\no fizzik\n';
+  S.points.forEach(p => { s += `v ${p.x.toFixed(4)} ${p.y.toFixed(4)} ${p.z.toFixed(4)}\n`; });
   const used = new Set();
   S.links.forEach(l => { used.add(l.a); used.add(l.b); s += `l ${l.a + 1} ${l.b + 1}\n`; });
   S.points.forEach((_, i) => { if (!used.has(i)) s += `p ${i + 1}\n`; });
@@ -488,8 +671,12 @@ document.getElementById('expObj').addEventListener('click', () => {
 });
 
 document.getElementById('expPng').addEventListener('click', () => {
-  render();
-  cv.toBlob(b => download('fizzik.png', b), 'image/png');
+  // без гизмо и подсказки плоскости
+  const g = guide.visible, h = tc.getHelper().visible;
+  guide.visible = false; tc.getHelper().visible = false;
+  renderer.render(scene, camera);
+  cv.toBlob(b => { download('fizzik.png', b); }, 'image/png');
+  guide.visible = g; tc.getHelper().visible = h;
 });
 
 const fileEl = document.getElementById('file');
@@ -499,24 +686,52 @@ fileEl.addEventListener('change', () => {
   if (!f) return;
   f.text().then(t => {
     const o = JSON.parse(t);
-    const ok = o && Array.isArray(o.points) && Array.isArray(o.links) &&
-      o.points.every(p => Number.isFinite(p.x) && Number.isFinite(p.y)) &&
+    const fin = Number.isFinite;
+    const ok = o && o.version === 2 && Array.isArray(o.points) && Array.isArray(o.links) &&
+      o.points.every(p => fin(p.x) && fin(p.y) && fin(p.z)) &&
       o.links.every(l => Number.isInteger(l.a) && Number.isInteger(l.b) &&
-        l.a >= 0 && l.b >= 0 && l.a < o.points.length && l.b < o.points.length && Number.isFinite(l.L));
+        l.a >= 0 && l.b >= 0 && l.a < o.points.length && l.b < o.points.length && fin(l.L));
     if (!ok) throw new Error('bad');
     restore(o); pushHist();
-  }).catch(() => alert('Не удалось открыть файл: это не файл Fizzik.'));
+  }).catch(() => alert('Не удалось открыть файл: это не 3D-файл Fizzik.'));
 });
 
-/* ---------- старт ---------- */
+/* ---------- цикл ---------- */
+function frame() {
+  if (!paused && !drawing) step();
+  if (!tcDragging && sel.points.size) centroid(pivot.position);
+  syncBoxes();
+  // плоскость рисования и стрелка нагрузки
+  guide.visible = tool === 'draw';
+  if (guide.visible) {
+    const n = new THREE.Vector3(...NORMALS[plane]);
+    guide.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), n);
+    guide.position.copy(orbit.target);
+  }
+  // стрелка нагрузки у выбранных точек
+  const fp = sel.points.size ? [...sel.points].map(i => S.points[i]).find(p => p && p.f && p.f.s > 0) : null;
+  arrow.visible = !!fp;
+  if (fp) {
+    arrow.position.copy(centroid(_p));
+    arrow.setDirection(_d.set(fp.f.dx, fp.f.dy, fp.f.dz).normalize());
+    arrow.setLength(0.3 + 0.4 * fp.f.s, 0.18, 0.1);
+  }
+  updateVisuals();
+  renderer.render(scene, camera);
+  requestAnimationFrame(frame);
+}
+
 setTool('draw');
 syncUI();
 pushHist();
-requestAnimationFrame(loop);
+requestAnimationFrame(frame);
 
-// для проверок
-window.__fizzik = { S, step, serialize, restore, pushHist, undo, redo };
-})();
+// для автопроверок
+window.__fizzik = {
+  S, sel, tc, pivot, camera, orbit, step, serialize, restore, pushHist,
+  project: (x, y, z) => { const s = toScreen(x, y, z); return { x: s.x, y: s.y, ok: s.ok }; },
+  size: () => ({ W, H })
+};
 </script>
 </body>
 </html>
