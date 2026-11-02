@@ -28,6 +28,8 @@
   .chk{display:flex;gap:8px;align-items:center;margin:2px 0}
   #stage{flex:1;position:relative;overflow:hidden;min-width:0}
   canvas{position:absolute;inset:0;display:block;touch-action:none}
+  #pauseBadge{position:absolute;left:50%;top:12px;transform:translateX(-50%);background:var(--ink);color:#fff;border-radius:6px;padding:6px 12px;font-size:12px;font-weight:600;letter-spacing:.03em;pointer-events:none;display:none}
+  body.paused #pauseBadge{display:block}
   #hint{position:absolute;left:12px;bottom:10px;background:rgba(251,250,246,.92);border:1px solid var(--line);border-radius:6px;padding:5px 9px;font-size:12px;color:var(--mute);pointer-events:none;max-width:70%}
 </style>
 <script type="importmap">
@@ -39,6 +41,12 @@
   <div id="panel">
     <h1>Fizzik</h1>
     <div class="sub">Рисовалка с физикой в 3D · Rock Parametric</div>
+
+    <div class="row" style="margin-bottom:10px">
+      <button id="pause" style="flex:3" title="Пробел">⏸ Пауза</button>
+      <button id="stepBtn" disabled title="Один кадр расчёта (на паузе)">Шаг</button>
+    </div>
+    <div class="note" style="margin:-4px 0 10px">Пауза (пробел) замораживает расчёт: рисуйте, назначайте силы, двигайте точки. Потом «Продолжить».</div>
 
     <fieldset class="tools"><legend>Инструмент</legend>
       <div class="row" id="tools">
@@ -93,7 +101,6 @@
         <button id="redo" title="Ctrl+Y">↷ Вперёд</button>
       </div>
       <div class="row" style="margin-top:6px">
-        <button id="pause">Пауза</button>
         <button id="clear">Очистить</button>
       </div>
     </fieldset>
@@ -118,7 +125,7 @@
       <div class="note">JSON хранит всё, чтобы продолжить работу. OBJ и PNG — текущий вид (после провисания).</div>
     </fieldset>
   </div>
-  <div id="stage"><canvas id="c"></canvas><div id="hint"></div></div>
+  <div id="stage"><canvas id="c"></canvas><div id="pauseBadge">ПАУЗА · расчёт стоит, можно рисовать и менять силы</div><div id="hint"></div></div>
 </div>
 
 <script type="module">
@@ -520,7 +527,14 @@ cv.addEventListener('pointermove', e => {
       drawing.last = n; drawing.moved = true;
     }
   } else if (pullIdx >= 0 && pullPlane) {
-    const h = planePoint(pullPlane); if (h) pullTarget.copy(h);
+    const h = planePoint(pullPlane);
+    if (h) {
+      pullTarget.copy(h);
+      if (paused && S.points[pullIdx]) {   // на паузе точка двигается сразу, без расчёта
+        const p = S.points[pullIdx];
+        p.x = p.px = h.x; p.y = p.py = h.y; p.z = p.pz = h.z;
+      }
+    }
   }
 });
 function endPointer(e) {
@@ -623,9 +637,18 @@ document.getElementById('addBox').addEventListener('click', () => {
 });
 document.getElementById('undo').addEventListener('click', undo);
 document.getElementById('redo').addEventListener('click', redo);
-document.getElementById('pause').addEventListener('click', e => {
-  paused = !paused; e.target.classList.toggle('on', paused); e.target.textContent = paused ? 'Продолжить' : 'Пауза';
-});
+const pauseBtn = document.getElementById('pause'), stepBtn = document.getElementById('stepBtn');
+function setPaused(v) {
+  paused = v;
+  document.body.classList.toggle('paused', v);
+  pauseBtn.classList.toggle('on', v);
+  pauseBtn.textContent = v ? '▶ Продолжить' : '⏸ Пауза';
+  stepBtn.disabled = !v;
+  // при выходе из паузы скорости обнуляем: точки не «выстреливают» от правок
+  if (!v) for (const p of S.points) { p.px = p.x; p.py = p.y; p.pz = p.z; }
+}
+pauseBtn.addEventListener('click', () => setPaused(!paused));
+stepBtn.addEventListener('click', () => { if (paused) step(); });
 document.getElementById('clear').addEventListener('click', () => {
   S.points = []; S.links = []; S.boxes = []; sel.points.clear(); sel.box = -1;
   rebuildBoxes(); updateGizmo(); pushHist();
@@ -639,7 +662,8 @@ function syncUI() { syncLoad(); ceilEl.checked = S.ceiling; ceilMesh.visible = S
 window.addEventListener('keydown', e => {
   if (document.activeElement && document.activeElement.tagName === 'INPUT') return;
   const k = e.key.toLowerCase();
-  if ((e.ctrlKey || e.metaKey) && k === 'z' && !e.shiftKey) { e.preventDefault(); undo(); }
+  if (e.code === 'Space') { e.preventDefault(); if (document.activeElement && document.activeElement.tagName === 'BUTTON') document.activeElement.blur(); setPaused(!paused); }
+  else if ((e.ctrlKey || e.metaKey) && k === 'z' && !e.shiftKey) { e.preventDefault(); undo(); }
   else if ((e.ctrlKey || e.metaKey) && (k === 'y' || (k === 'z' && e.shiftKey))) { e.preventDefault(); redo(); }
   else if (k === 'delete' || k === 'backspace') {
     if (sel.points.size) {
