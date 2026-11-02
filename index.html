@@ -62,6 +62,10 @@
       </div>
     </fieldset>
 
+    <fieldset><legend>Углы при рисовании</legend>
+      <div class="chk"><input type="checkbox" id="autoAngle" checked> <label for="autoAngle">Фиксировать углы автоматически</label></div>
+    </fieldset>
+
     <fieldset><legend>Сетка</legend>
       <div class="chk"><input type="checkbox" id="snap" checked> <label for="snap">Привязка к 3D-сетке (G)</label></div>
       <label class="sl" style="margin-top:6px">Шаг сетки
@@ -247,6 +251,7 @@ let drawing = null;       // {last, plane, moved}
 let pullIdx = -1;
 let frame = null;         // рамка выделения {x0,y0,x1,y1,shift}
 let connectFrom = -1;     // «Соединить»: первая выбранная точка
+let autoAngle = true;   // «Рисовать» и «Соединить» сразу фиксируют углы
 let snapOn = true, snapStep = 0.5;   // привязка к 3D-сетке
 const pullTarget = new THREE.Vector3();
 let pullPlane = null;
@@ -280,7 +285,7 @@ function updateVisuals() {
       anchorMesh.setMatrixAt(na, _m); anchorMesh.setColorAt(na, sl ? C.sel : C.anchor); na++;
     } else {
       _m.compose(_p.set(p.x, p.y, p.z), _q.identity(), _s.set(0.035, 0.035, 0.035));
-      pointMesh.setMatrixAt(np, _m); pointMesh.setColorAt(np, sl ? C.sel : (angV.has(i) ? C.angle : (p.f ? C.loaded : C.point))); np++;
+      pointMesh.setMatrixAt(np, _m); pointMesh.setColorAt(np, sl ? C.sel : (p.f ? C.loaded : (angV.has(i) ? C.angle : C.point))); np++;
     }
   });
   pointMesh.count = np; anchorMesh.count = na;
@@ -598,7 +603,7 @@ cv.addEventListener('pointerdown', e => {
       if (i < 0) i = addPoint(h.x, h.y, h.z);
     }
     if (i < 0) return;
-    drawing = { last: i, plane: pl, moved: false };
+    drawing = { last: i, plane: pl, moved: false, touched: new Set([i]) };
   } else if (tool === 'point') {
     const h = planePoint(drawPlane(plane)); if (!h) return;
     snapV(h);
@@ -610,9 +615,10 @@ cv.addEventListener('pointerdown', e => {
     else if (i === connectFrom) connectFrom = -1;
     else {
       const before = S.links.length;
-      addLink(connectFrom, i);
+      const from = connectFrom;
+      addLink(from, i);
       connectFrom = -1;
-      if (S.links.length > before) pushHist();
+      if (S.links.length > before) { if (autoAngle) fixAngles([from, i]); pushHist(); }
     }
   } else if (tool === 'anchor') {
     const i = hitPoint(mx, my, 14);
@@ -687,7 +693,7 @@ cv.addEventListener('pointermove', e => {
       if (n < 0) n = addPoint(h.x, h.y, h.z);
       if (n < 0) return;
       addLink(drawing.last, n);
-      drawing.last = n; drawing.moved = true;
+      drawing.last = n; drawing.moved = true; drawing.touched.add(n);
     }
   } else if (pullIdx >= 0 && pullPlane) {
     const h = planePoint(pullPlane);
@@ -720,7 +726,8 @@ function endPointer(e) {
   if (drawing) {
     if (drawing.moved) {
       const j = hitPoint(mx, my, SNAP);
-      if (j >= 0 && j !== drawing.last) addLink(drawing.last, j);
+      if (j >= 0 && j !== drawing.last) { addLink(drawing.last, j); drawing.touched.add(j); }
+      if (autoAngle) fixAngles([...drawing.touched]);
     }
     drawing = null; pushHist();
   } else if (pullIdx >= 0) {
@@ -741,7 +748,7 @@ cv.addEventListener('dblclick', e => {
 
 /* ---------- интерфейс ---------- */
 const hints = {
-  draw: 'Тяните левой кнопкой, чтобы нарисовать линию на плоскости. Конец рядом с точкой замыкает линию. Правая кнопка — вращать камеру.',
+  draw: 'Тяните левой кнопкой, чтобы нарисовать линию на плоскости (углы фиксируются сами, если включён флажок). Конец рядом с точкой замыкает линию. Правая кнопка — вращать камеру.',
   point: 'Нажмите на плоскости рисования — поставить точку (с привязкой — в узел сетки).',
   connect: 'Нажмите на первую точку, затем на вторую — между ними появится линия. Esc — отмена.',
   anchor: 'Нажмите на точку — закрепить или отпустить.',
@@ -764,11 +771,13 @@ document.querySelectorAll('#planes button').forEach(b => b.addEventListener('cli
 
 const snapEl = document.getElementById('snap'), snapStepEl = document.getElementById('snapStep');
 function applySnap() {
+  autoAngle = document.getElementById('autoAngle').checked;
   snapOn = snapEl.checked; snapStep = +snapStepEl.value;
   tc.setTranslationSnap(snapOn ? snapStep : null);   // гизмо тоже двигает по узлам
   rebuildGrid();
 }
 snapEl.addEventListener('change', applySnap);
+document.getElementById('autoAngle').addEventListener('change', applySnap);
 snapStepEl.addEventListener('change', applySnap);
 
 const loadEl = document.getElementById('load'), loadVal = document.getElementById('loadVal');
