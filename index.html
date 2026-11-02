@@ -122,7 +122,9 @@
         <button id="angleOn">Зафиксировать</button>
         <button id="angleOff">Снять</button>
       </div>
-      <div class="note">В выбранных точках сохраняются углы между всеми линиями, которые в них сходятся. Куб из 12 линий: выделите рамкой все 8 углов и нажмите «Зафиксировать» — куб держит форму. Если ничего не выбрано — действует на все точки. Точки с углом фиолетовые.</div>
+      <label class="sl" style="margin-top:6px">Пружинность угла <b id="angleSoftVal">0.00</b>
+        <input type="range" id="angleSoft" min="0" max="1" step="0.05" value="0"></label>
+      <div class="note">В выбранных точках сохраняются углы между всеми линиями, которые в них сходятся. Куб из 12 линий: выделите рамкой все 8 углов и нажмите «Зафиксировать» — куб держит форму. Если ничего не выбрано — действует на все точки. Точки с углом фиолетовые. Пружинность 0 — угол жёсткий: всё, что связано такими углами, двигается как одно твёрдое тело. Больше 0 — угол поддаётся и пружинит обратно.</div>
     </fieldset>
 
     <fieldset><legend>Коллизия</legend>
@@ -339,7 +341,7 @@ function serialize() {
     app: 'Fizzik', version: 2,
     points: S.points.map(p => ({ x: r4(p.x), y: r4(p.y), z: r4(p.z), a: p.a ? 1 : 0, f: p.f ? { dx: p.f.dx, dy: p.f.dy, dz: p.f.dz, s: p.f.s } : null })),
     links: S.links.map(l => ({ a: l.a, b: l.b, L: r4(l.L), k: l.k })),
-    angles: S.angles.map(g => ({ a: g.a, b: g.b, c: g.c, t: r4(g.t) })),
+    angles: S.angles.map(g => g.r ? { a: g.a, b: g.b, c: g.c, t: r4(g.t), r: g.r } : { a: g.a, b: g.b, c: g.c, t: r4(g.t) }),
     boxes: S.boxes.map(b => ({ x: r4(b.x), y: r4(b.y), z: r4(b.z), w: b.w, h: b.h, d: b.d })),
     ceiling: S.ceiling
   });
@@ -348,13 +350,15 @@ function restore(o) {
   S.points = o.points.map(p => ({ x: p.x, y: p.y, z: p.z, px: p.x, py: p.y, pz: p.z, a: !!p.a,
     f: p.f && Number.isFinite(p.f.s) ? { dx: +p.f.dx || 0, dy: +p.f.dy || 0, dz: +p.f.dz || 0, s: p.f.s } : null }));
   S.links = o.links.map(l => ({ a: l.a, b: l.b, L: l.L, k: l.k || 0 }));
-  S.angles = (o.angles || []).map(g => ({ a: g.a, b: g.b, c: g.c, t: g.t }));
+  S.angles = (o.angles || []).map(g => ({ a: g.a, b: g.b, c: g.c, t: g.t, r: Math.max(0, Math.min(1, +g.r || 0)) }));
   S.boxes = (o.boxes || []).map(b => ({ x: b.x, y: b.y, z: b.z, w: b.w, h: b.h, d: b.d }));
   S.ceiling = !!o.ceiling;
   sel.points.clear(); sel.box = -1;
+  rigidDirty = true;
   rebuildBoxes(); updateGizmo(); syncUI();
 }
 function pushHist() {
+  rigidDirty = true;   // форма твёрдых тел запоминается заново после каждого действия
   hist = hist.slice(0, hi + 1);
   hist.push(serialize());
   if (hist.length > 200) hist.shift();
@@ -402,7 +406,7 @@ function updateGizmo() {
   if (sel.points.size) { centroid(pivot.position); lastPivot.copy(pivot.position); tc.attach(pivot); }
   else if (sel.box >= 0 && boxMeshes[sel.box]) tc.attach(boxMeshes[sel.box]);
   else tc.detach();
-  syncSpring(); syncLoad();
+  syncSpring(); syncLoad(); syncAngleSoft();
 }
 
 /* ---------- геометрия и выбор ---------- */
@@ -472,7 +476,7 @@ function fixAngles(idx) {   // у каждой точки — все пары с
     for (let i = 0; i < nb.length; i++) for (let j = i + 1; j < nb.length; j++) {
       const a = nb[i], c = nb[j];
       if (S.angles.some(g => g.b === b && ((g.a === a && g.c === c) || (g.a === c && g.c === a)))) continue;
-      S.angles.push({ a, b, c, t: angleBetween(a, b, c) });
+      S.angles.push({ a, b, c, t: angleBetween(a, b, c), r: 0 });
     }
   }
 }
@@ -513,8 +517,89 @@ function pointAt(x, y, z) {   // уже есть точка в этом мест
   return S.points.findIndex(p => Math.abs(p.x - x) < 1e-6 && Math.abs(p.y - y) < 1e-6 && Math.abs(p.z - z) < 1e-6);
 }
 
+/* ---------- твёрдые тела: точки, связанные жёсткими углами ---------- */
+let rigidDirty = true, rigid = [];
+function rebuildRigid() {
+  rigidDirty = false; rigid = [];
+  const n = S.points.length, par = Array.from({ length: n }, (_, i) => i);
+  const find = i => { while (par[i] !== i) { par[i] = par[par[i]]; i = par[i]; } return i; };
+  const uni = (a, b) => { a = find(a); b = find(b); if (a !== b) par[a] = b; };
+  let any = false;
+  for (const g of S.angles) if (!g.r && g.a < n && g.b < n && g.c < n) { uni(g.a, g.b); uni(g.b, g.c); any = true; }
+  if (!any) return;
+  const groups = new Map();
+  for (const g of S.angles) if (!g.r) for (const i of [g.a, g.b, g.c]) {
+    const r = find(i); if (!groups.has(r)) groups.set(r, new Set()); groups.get(r).add(i);
+  }
+  for (const set of groups.values()) {
+    const idx = [...set]; if (idx.length < 3) continue;
+    const inside = new Set(idx);
+    const ls = S.links.filter(l => inside.has(l.a) && inside.has(l.b));
+    const sc = rigidScale(ls);
+    let cx = 0, cy = 0, cz = 0;
+    for (const i of idx) { const p = S.points[i]; cx += p.x; cy += p.y; cz += p.z; }
+    cx /= idx.length; cy /= idx.length; cz /= idx.length;
+    const rest = idx.map(i => { const p = S.points[i]; return [(p.x - cx) / sc, (p.y - cy) / sc, (p.z - cz) / sc]; });
+    rigid.push({ idx, rest, links: ls, q: new THREE.Quaternion() });
+  }
+}
+// пружина внутри твёрдого тела меняет его размер целиком (средняя по линиям тела)
+function rigidScale(ls) {
+  if (!ls.length) return 1;
+  let s = 0; for (const l of ls) s += Math.pow(2, Math.max(-1, Math.min(1, l.k)));
+  return s / ls.length;
+}
+const _rm = new THREE.Matrix4(), _rq = new THREE.Quaternion(), _ax = new THREE.Vector3();
+function matchRigid(body, pinned) {
+  const { idx, rest } = body, sc = rigidScale(body.links);
+  let W = 0, cx = 0, cy = 0, cz = 0;
+  const w = idx.map(i => { const p = S.points[i]; return (p.a || pinned.has(p)) ? 1e4 : 1; });
+  idx.forEach((i, k) => { const p = S.points[i]; W += w[k]; cx += w[k] * p.x; cy += w[k] * p.y; cz += w[k] * p.z; });
+  cx /= W; cy /= W; cz /= W;
+  // центр формы в покое с теми же весами
+  let rx = 0, ry = 0, rz = 0;
+  rest.forEach((r, k) => { rx += w[k] * r[0]; ry += w[k] * r[1]; rz += w[k] * r[2]; });
+  rx /= W; ry /= W; rz /= W;
+  // A = Σ w (p − c)(r − rc)ᵀ, столбцы A
+  const A = [[0, 0, 0], [0, 0, 0], [0, 0, 0]];
+  idx.forEach((i, k) => {
+    const p = S.points[i], r = rest[k];
+    const px = p.x - cx, py = p.y - cy, pz = p.z - cz, qx = (r[0] - rx) * sc, qy = (r[1] - ry) * sc, qz = (r[2] - rz) * sc;
+    A[0][0] += w[k] * px * qx; A[0][1] += w[k] * py * qx; A[0][2] += w[k] * pz * qx;
+    A[1][0] += w[k] * px * qy; A[1][1] += w[k] * py * qy; A[1][2] += w[k] * pz * qy;
+    A[2][0] += w[k] * px * qz; A[2][1] += w[k] * py * qz; A[2][2] += w[k] * pz * qz;
+  });
+  // поворот из A (Müller и др., 2016: итерации по кватерниону с тёплым стартом)
+  const q = body.q;
+  for (let it = 0; it < 12; it++) {
+    _rm.makeRotationFromQuaternion(q); const e = _rm.elements;
+    const R = [[e[0], e[1], e[2]], [e[4], e[5], e[6]], [e[8], e[9], e[10]]];
+    let ox = 0, oy = 0, oz = 0, dot = 0;
+    for (let j = 0; j < 3; j++) {
+      const r = R[j], a = A[j];
+      ox += r[1] * a[2] - r[2] * a[1]; oy += r[2] * a[0] - r[0] * a[2]; oz += r[0] * a[1] - r[1] * a[0];
+      dot += r[0] * a[0] + r[1] * a[1] + r[2] * a[2];
+    }
+    const k = 1 / (Math.abs(dot) + 1e-9);
+    ox *= k; oy *= k; oz *= k;
+    const ang = Math.hypot(ox, oy, oz);
+    if (ang < 1e-9) break;
+    _rq.setFromAxisAngle(_ax.set(ox / ang, oy / ang, oz / ang), ang);
+    q.premultiply(_rq).normalize();
+  }
+  _rm.makeRotationFromQuaternion(q); const e = _rm.elements;
+  idx.forEach((i, k) => {
+    const p = S.points[i]; if (w[k] > 1) return;   // якорь и точку под мышью не двигаем
+    const x = (rest[k][0] - rx) * sc, y = (rest[k][1] - ry) * sc, z = (rest[k][2] - rz) * sc;
+    p.x = cx + e[0] * x + e[4] * y + e[8] * z;
+    p.y = cy + e[1] * x + e[5] * y + e[9] * z;
+    p.z = cz + e[2] * x + e[6] * y + e[10] * z;
+  });
+}
+
 /* ---------- физика (Верле, 3D) ---------- */
 function step() {
+  if (rigidDirty) rebuildRigid();   // форму запоминаем до сил этого кадра
   const pinned = new Set();
   if (tcDragging) for (const i of sel.points) if (S.points[i]) pinned.add(S.points[i]);
   if (pullIdx >= 0 && S.points[pullIdx]) pinned.add(S.points[pullIdx]);
@@ -536,7 +621,8 @@ function step() {
   if (S.angles.length) for (const l of S.links) tlen.set(lkey(l.a, l.b), l.L * Math.pow(2, Math.max(-1, Math.min(1, l.k))));
   for (let it = 0; it < 20; it++) {
     for (const g of S.angles) {
-      // угол в вершине b держится, если расстояние a–c равно значению из теоремы косинусов
+      if (!g.r) continue;   // жёсткие углы держит твёрдое тело (ниже)
+      // мягкий угол в вершине b держится, если расстояние a–c равно значению из теоремы косинусов
       const la = tlen.get(lkey(g.a, g.b)), lc = tlen.get(lkey(g.b, g.c));
       if (!la || !lc) continue;
       const target = Math.sqrt(Math.max(1e-12, la * la + lc * lc - 2 * la * lc * Math.cos(g.t)));
@@ -545,7 +631,7 @@ function step() {
       if (!wa && !wc) continue;
       const dx = c.x - a.x, dy = c.y - a.y, dz = c.z - a.z;
       const d = Math.hypot(dx, dy, dz) || 1e-9;
-      const f = (d - target) / d / (wa + wc);
+      const f = (d - target) / d / (wa + wc) * (0.3 * (1 - g.r) * (1 - g.r) + 0.004);
       a.x += dx * f * wa; a.y += dy * f * wa; a.z += dz * f * wa;
       c.x -= dx * f * wc; c.y -= dy * f * wc; c.z -= dz * f * wc;
     }
@@ -560,6 +646,7 @@ function step() {
       a.x += dx * f * wa; a.y += dy * f * wa; a.z += dz * f * wa;
       b.x -= dx * f * wb; b.y -= dy * f * wb; b.z -= dz * f * wb;
     }
+    for (const body of rigid) matchRigid(body, pinned);
     for (const p of S.points) if (!p.a && !pinned.has(p)) collide(p);
   }
 }
@@ -841,6 +928,18 @@ document.getElementById('anchorOff').addEventListener('click', () => {
 });
 document.getElementById('angleOn').addEventListener('click', () => { fixAngles(selIdx()); pushHist(); });
 document.getElementById('angleOff').addEventListener('click', () => { releaseAngles(selIdx()); pushHist(); });
+const angleSoftEl = document.getElementById('angleSoft'), angleSoftVal = document.getElementById('angleSoftVal');
+function softTargets() { const s = new Set(selIdx()); return S.angles.filter(g => s.has(g.b)); }
+angleSoftEl.addEventListener('input', () => {
+  const v = +angleSoftEl.value; angleSoftVal.textContent = v.toFixed(2);
+  softTargets().forEach(g => { g.r = v; }); rigidDirty = true;
+});
+angleSoftEl.addEventListener('change', pushHist);
+function syncAngleSoft() {
+  const t = sel.points.size ? softTargets() : [];
+  const v = t.length ? (t[0].r || 0) : 0;
+  angleSoftEl.value = v; angleSoftVal.textContent = (+v).toFixed(2);
+}
 
 ceilEl.addEventListener('change', () => { S.ceiling = ceilEl.checked; ceilMesh.visible = S.ceiling; pushHist(); });
 document.getElementById('addBox').addEventListener('click', () => {
@@ -972,7 +1071,7 @@ pushHist();
 requestAnimationFrame(tick);
 
 // для автопроверок
-window.__fizzik = {
+window.__fizzik = { get rigid() { return rigid; },
   S, sel, tc, pivot, camera, orbit, step, serialize, restore, pushHist,
   project: (x, y, z) => { const s = toScreen(x, y, z); return { x: s.x, y: s.y, ok: s.ok }; },
   size: () => ({ W, H })
