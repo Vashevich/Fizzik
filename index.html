@@ -121,7 +121,7 @@
     </section>
 
     <section>
-      <h2>Рисование <i class="tip" data-tip="Новые фигуры сразу получают гравитацию и жёсткие углы — можно выключить. Оси как в Rhino: Z вверх. Плоскость: «Вид» — перпендикулярно взгляду, как на экране, без сетки; XY — горизонтальная (как пол), XZ — фронтальная, YZ — боковая, с сеткой. Плоскость проходит через центр обзора и не меняется, пока тянете штрих. Сетка (привязка) ставит точки и гизмо в узлы 3D-сетки; у курсора видна объёмная сетка узлов и оранжевая точка — сразу видно, куда в пространстве встанет точка.">i</i></h2>
+      <h2>Рисование <i class="tip" data-tip="Новые фигуры сразу получают гравитацию и жёсткие углы — можно выключить. Оси как в Rhino: Z вверх. Плоскость: «Вид» — перпендикулярно взгляду, как на экране, без сетки; XY — горизонтальная (как пол), XZ — фронтальная, YZ — боковая, с сеткой. Плоскость проходит через центр обзора и не меняется, пока тянете штрих. Сетка (привязка) ставит точки и гизмо в узлы 3D-сетки; у курсора видна объёмная сетка узлов, оранжевая точка и отвес до пола — сразу видно, куда в пространстве встанет точка.">i</i></h2>
       <label class="chk"><input type="checkbox" id="autoLoad" checked> Гравитация</label>
       <label class="chk"><input type="checkbox" id="autoAngle" checked> Жёсткие углы</label>
       <div class="chk"><label><input type="checkbox" id="snap"> Сетка</label>
@@ -197,7 +197,7 @@
       <div><i style="background:#2f9e44"></i>пружина (длина линии изменена)</div>
       <div><i style="background:#ff5a2b"></i>выбрано</div>
       <div class="small">метки у узла с якорем или пружиной:<br><i style="background:#2b6cb0"></i>нагрузка <i style="background:#7b3fa0;margin-left:6px"></i>угол</div>
-      <div class="small">с привязкой у курсора — 3D-сетка узлов и оранжевая точка показывают, куда встанет точка</div>
+      <div class="small">с привязкой у курсора — 3D-сетка узлов, оранжевая точка и отвес до пола показывают, куда встанет точка</div>
     </div></div>
 </div>
 
@@ -971,7 +971,7 @@ function updateCursor(onPlane) {
   cursorDot.position.copy(_cur); cursorDot.scale.setScalar(0.045);
   const a = dropLine.geometry.attributes.position;   // отвес до пола: видно высоту точки
   a.setXYZ(0, _cur.x, _cur.y, _cur.z); a.setXYZ(1, _cur.x, 0, _cur.z); a.needsUpdate = true;
-  dropLine.visible = false;   // линии у курсора не показываем
+  dropLine.visible = snapOn && _cur.y > 1e-3;   // отвес до пола (только с сеткой): видно, где точка в пространстве
 }
 cv.addEventListener('pointerenter', () => { hoverOn = true; });
 cv.addEventListener('pointerleave', () => { hoverOn = false; });
