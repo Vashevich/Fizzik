@@ -121,7 +121,7 @@
     </section>
 
     <section>
-      <h2>Рисование <i class="tip" data-tip="Новые фигуры сразу получают гравитацию и жёсткие углы — можно выключить. Оси как в Rhino: Z вверх. Плоскость: «Вид» — перпендикулярно взгляду, как на экране, без сетки; XY — горизонтальная (как пол), XZ — фронтальная, YZ — боковая, с сеткой. Плоскость проходит через центр обзора и не меняется, пока тянете штрих. Сетка (привязка) ставит точки и гизмо в узлы 3D-сетки; у курсора видна объёмная сетка, оранжевая точка и отвес до пола — сразу видно, куда в пространстве встанет точка.">i</i></h2>
+      <h2>Рисование <i class="tip" data-tip="Новые фигуры сразу получают гравитацию и жёсткие углы — можно выключить. Оси как в Rhino: Z вверх. Плоскость: «Вид» — перпендикулярно взгляду, как на экране, без сетки; XY — горизонтальная (как пол), XZ — фронтальная, YZ — боковая, с сеткой. Плоскость проходит через центр обзора и не меняется, пока тянете штрих. Сетка (привязка) ставит точки и гизмо в узлы 3D-сетки; у курсора видна объёмная сетка узлов и оранжевая точка — сразу видно, куда в пространстве встанет точка.">i</i></h2>
       <label class="chk"><input type="checkbox" id="autoLoad" checked> Гравитация</label>
       <label class="chk"><input type="checkbox" id="autoAngle" checked> Жёсткие углы</label>
       <div class="chk"><label><input type="checkbox" id="snap"> Сетка</label>
@@ -197,7 +197,7 @@
       <div><i style="background:#2f9e44"></i>пружина (длина линии изменена)</div>
       <div><i style="background:#ff5a2b"></i>выбрано</div>
       <div class="small">метки у узла с якорем или пружиной:<br><i style="background:#2b6cb0"></i>нагрузка <i style="background:#7b3fa0;margin-left:6px"></i>угол</div>
-      <div class="small">с привязкой у курсора — 3D-сетка, оранжевая точка и отвес до пола показывают, куда встанет точка</div>
+      <div class="small">с привязкой у курсора — 3D-сетка узлов и оранжевая точка показывают, куда встанет точка</div>
     </div></div>
 </div>
 
@@ -278,22 +278,17 @@ rubber.frustumCulled = false; rubber.visible = false; scene.add(rubber);
 const LAT = 2;   // ±2 шага по каждой оси
 const lattice = new THREE.Group(); lattice.visible = false; scene.add(lattice);
 {
-  const pos = [], col = [], c = new THREE.Color(), acc = new THREE.Color(0xff5a2b), bgc = new THREE.Color(0xf6f7fa);
+  const pos = [], col = [], acc = new THREE.Color(0xff5a2b);
   for (let i = -LAT; i <= LAT; i++) for (let j = -LAT; j <= LAT; j++) for (let k = -LAT; k <= LAT; k++) {
     if (!i && !j && !k) continue;
     pos.push(i, j, k);
     const d = Math.hypot(i, j, k) / Math.hypot(LAT, LAT, LAT);
-    c.copy(acc).lerp(bgc, Math.min(1, 0.15 + d * 0.95)); col.push(c.r, c.g, c.b);
+    col.push(acc.r, acc.g, acc.b, Math.max(0, 0.9 * (1 - d) ** 1.6));   // дальние узлы уходят в прозрачность
   }
   const g = new THREE.BufferGeometry();
   g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
-  g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
-  lattice.add(new THREE.Points(g, new THREE.PointsMaterial({ size: 5, sizeAttenuation: false, vertexColors: true, depthWrite: false })));
-  // крест осей через узел: X красный, Y (вглубь) зелёный, Z (вверх) синий — как в Rhino
-  const ax = (a, b, color) => { const l = new THREE.Line(new THREE.BufferGeometry().setFromPoints([a, b]), new THREE.LineBasicMaterial({ color, transparent: true, opacity: 0.55, depthWrite: false })); lattice.add(l); };
-  ax(new THREE.Vector3(-LAT, 0, 0), new THREE.Vector3(LAT, 0, 0), 0xff3b30);
-  ax(new THREE.Vector3(0, -LAT, 0), new THREE.Vector3(0, LAT, 0), 0x2f6bff);
-  ax(new THREE.Vector3(0, 0, -LAT), new THREE.Vector3(0, 0, LAT), 0x22b14c);
+  g.setAttribute('color', new THREE.Float32BufferAttribute(col, 4));
+  lattice.add(new THREE.Points(g, new THREE.PointsMaterial({ size: 5, sizeAttenuation: false, vertexColors: true, transparent: true, depthWrite: false })));
 }
 const cursorDot = new THREE.Mesh(new THREE.SphereGeometry(1, 16, 10), new THREE.MeshBasicMaterial({ color: 0xff5a2b, transparent: true, opacity: 0.85, depthWrite: false }));
 cursorDot.visible = false; scene.add(cursorDot);
@@ -354,7 +349,7 @@ function updateVisuals() {
       _m.compose(_p.set(p.x, p.y, p.z), _q.identity(), _s.set(0.09, 0.09, 0.09));
       anchorMesh.setMatrixAt(na, _m); anchorMesh.setColorAt(na, sl ? C.sel : C.anchor); na++;
     } else {
-      _m.compose(_p.set(p.x, p.y, p.z), _q.identity(), _s.set(0.035, 0.035, 0.035));
+      _m.compose(_p.set(p.x, p.y, p.z), _q.identity(), _s.set(0.0525, 0.0525, 0.0525));
       pointMesh.setMatrixAt(np, _m); pointMesh.setColorAt(np, sl ? C.sel : C.point); np++;
     }
   });
@@ -373,7 +368,7 @@ function updateVisuals() {
     if (sprV.has(i)) fs.push(C.spring);
     // нагрузка + угол — обычное состояние нарисованного, его не помечаем
     if (fs.length < 2 || !(p.a || sprV.has(i))) return;
-    const d = p.a ? 0.11 : 0.07;
+    const d = p.a ? 0.11 : 0.09;
     fs.forEach((c, k) => {
       const t = Math.PI * 0.75 - k * Math.PI / 2.6;   // сверху слева по часовой
       const cx = Math.cos(t) * d, cy = Math.sin(t) * d;
@@ -976,7 +971,7 @@ function updateCursor(onPlane) {
   cursorDot.position.copy(_cur); cursorDot.scale.setScalar(0.045);
   const a = dropLine.geometry.attributes.position;   // отвес до пола: видно высоту точки
   a.setXYZ(0, _cur.x, _cur.y, _cur.z); a.setXYZ(1, _cur.x, 0, _cur.z); a.needsUpdate = true;
-  dropLine.visible = _cur.y > 1e-3;
+  dropLine.visible = false;   // линии у курсора не показываем
 }
 cv.addEventListener('pointerenter', () => { hoverOn = true; });
 cv.addEventListener('pointerleave', () => { hoverOn = false; });
