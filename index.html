@@ -50,7 +50,7 @@
   canvas{position:absolute;inset:0;display:block;touch-action:none}
   #stage>*:not(canvas){z-index:2}
   #frame{position:absolute;border:1px dashed var(--acc);background:rgba(255,90,43,.08);pointer-events:none;display:none}
-  #pauseBadge{position:absolute;left:50%;top:10px;transform:translateX(-50%);background:var(--acc);color:#fff;border-radius:20px;padding:4px 11px;font-size:11.5px;font-weight:650;pointer-events:none;display:none}
+  #pauseBadge{position:absolute;left:10px;top:10px;background:var(--acc);color:#fff;border-radius:20px;padding:4px 11px;font-size:11.5px;font-weight:650;pointer-events:none;display:none}
   body.paused #pauseBadge{display:block}
   body.paused #stage{box-shadow:inset 0 0 0 2px var(--acc)}
   #legBtn{position:absolute;right:10px;top:10px;width:28px;height:28px;padding:0;border-radius:50%;background:#fff;box-shadow:0 1px 4px rgba(20,24,40,.15);font-weight:700;color:var(--mute)}
@@ -61,8 +61,12 @@
   #legend i.sq{border-radius:2px}
   #legend .small{font-size:11px;color:var(--mute);line-height:1.3;margin:2px 0}
   #hint{display:none}
-  .modeRow{display:flex;gap:5px;align-items:center;flex:1;justify-content:flex-end;margin-left:8px;min-width:0}
-  #mode{flex:0 1 auto;min-width:0;max-width:140px;font-size:12px;font-weight:600;padding:5px 4px;border-radius:8px;background:var(--soft);border:1px solid transparent}
+  #modebar{position:absolute;top:10px;left:50%;transform:translateX(-50%);display:flex;gap:2px;background:#fff;border-radius:12px;padding:3px;box-shadow:0 2px 10px rgba(20,24,40,.12)}
+  #modebar .mode{display:flex;flex-direction:column;align-items:center;gap:2px;min-width:56px;padding:5px 6px 4px;background:transparent;border-radius:9px;font-size:11px;font-weight:600;color:var(--mute)}
+  #modebar .mode svg{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+  #modebar .mode:hover{background:var(--soft);color:var(--ink)}
+  #modebar .mode.on{background:var(--acc);color:#fff}
+  #modebar .mode.na{opacity:.35}
   #toast{position:absolute;left:50%;bottom:16px;transform:translateX(-50%);background:var(--ink);color:#fff;border-radius:20px;padding:7px 14px;font-size:12.5px;pointer-events:none;opacity:0;transition:opacity .25s;max-width:90%;text-align:center}
   #toast.show{opacity:1}
   #xrEnter{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);display:none;padding:16px 26px;font-size:17px;font-weight:700;border-radius:14px;background:var(--acc);color:#fff;box-shadow:0 10px 30px rgba(255,90,43,.35)}
@@ -89,15 +93,16 @@
     #sheetHead{display:flex;position:sticky;top:0;background:var(--panel);padding:10px 0 8px;align-items:center;justify-content:space-between;z-index:1}
     #sheetHead b{font-size:15px}
     #panel .head>div:first-child,#panel .pauseRow,#panel section.tools{display:none}
-    .modeRow{margin-left:0;justify-content:flex-start}
-    #mode{max-width:none;font-size:14px;padding:8px}
+    #modebar{top:8px;left:8px;transform:none}
+    #modebar .mode{min-width:42px;padding:6px 4px}
+    #modebar .mode span{display:none}
+    #pauseBadge{top:auto;bottom:10px;left:10px}
     #panel button{min-height:38px}
     .seg button{min-height:34px}
     label.sl input{height:28px}
     input[type=checkbox]{width:20px;height:20px}
     #legBtn{width:34px;height:34px}
     #legend{top:52px;font-size:13px}
-    #pauseBadge{left:12px;transform:none;top:14px}
   }
 </style>
 <script type="importmap">
@@ -110,16 +115,7 @@
     <div id="sheetHead"><b>Настройки</b><button id="sheetClose" class="ico" title="Закрыть">✕</button></div>
     <header class="head">
       <div><h1>Fizzik</h1><div class="sub">«Rock-Parametric»</div></div>
-      <div class="modeRow">
-        <select id="mode" title="Режим работы">
-        <option value="desk" title="Мышь и клавиатура">🖥 ПК</option>
-        <option value="tilt" title="Телефон — наклон">📱 Наклон</option>
-        <option value="vr" title="VR · Quest">🥽 VR</option>
-        <option value="mr" title="MR · Quest, сквозной">🪟 MR</option>
-        <option value="ar" title="AR · телефон Android">📷 AR</option>
-      </select>
-        <i class="tip" data-tip="Fizzik — рисовалка с физикой в 3D: нарисованное сразу падает и держит форму; пауза (пробел) — всё замирает. Ctrl+Z / Ctrl+Y — назад и вперёд, Delete — удалить выбранное, G — сетка. Режимы: Компьютер — мышь и клавиатура. Телефон — наклон: положите телефон экраном вверх и наклоняйте — гравитация идёт по наклону, нарисованное скатывается (сцена в лотке 6×6 м, вид сверху). VR — полное погружение в Quest; MR — сцена в вашей комнате на настоящем полу (Quest 3, сквозной режим). AR — сцена через камеру телефона Android на реальном полу. Недоступные на этом устройстве режимы помечены.">i</i>
-      </div>
+      <i class="tip" data-tip="Fizzik — рисовалка с физикой в 3D: нарисованное сразу падает и держит форму; пауза (пробел) — всё замирает. Ctrl+Z / Ctrl+Y — назад и вперёд, Delete — удалить выбранное, G — сетка. Режимы — кнопки вверху сцены: ПК — мышь и клавиатура. Телефон — наклон: положите телефон экраном вверх и наклоняйте — гравитация идёт по наклону, нарисованное скатывается (сцена в лотке 6×6 м, вид сверху). VR — полное погружение в Quest; MR — сцена в вашей комнате на настоящем полу (Quest 3, сквозной режим). AR — сцена через камеру телефона Android на реальном полу. Недоступные на этом устройстве режимы помечены.">i</i>
     </header>
 
     <div class="row pauseRow">
@@ -213,7 +209,7 @@
     </div>
     <button id="mMore" class="ico" title="Настройки и силы">☰</button>
   </div>
-  <div id="stage"><canvas id="c"></canvas><div id="frame"></div><div id="pauseBadge">⏸ пауза</div><div id="hint"></div><button id="legBtn" title="Что значат цвета">?</button><div id="toast"></div><button id="xrEnter"></button>
+  <div id="stage"><canvas id="c"></canvas><div id="modebar" role="toolbar" aria-label="Режим работы"><button class="mode on" data-mode="desk" title="Компьютер: мышь и клавиатура"><svg viewBox="0 0 32 32"><rect x="3" y="6" width="26" height="17" rx="2"/><path d="M11 27h10M16 23v4"/></svg><span>ПК</span></button><button class="mode" data-mode="tilt" title="Телефон — наклон: гравитация по наклону телефона"><svg viewBox="0 0 32 32"><rect x="9" y="3" width="14" height="26" rx="3" transform="rotate(-18 16 16)"/><path d="M5 27c3 2 8 2 11 0" /><circle cx="22" cy="24" r="1.6"/></svg><span>Наклон</span></button><button class="mode" data-mode="vr" title="VR в шлеме Quest: полное погружение"><svg viewBox="0 0 32 32"><path d="M4 12c0-2 1.5-3.5 3.5-3.5h17c2 0 3.5 1.5 3.5 3.5v7c0 2-1.5 3.5-3.5 3.5h-4l-2-3h-5l-2 3h-4C5.5 22.5 4 21 4 19z"/><path d="M3 28h26M8 28c2-3 5-4 8-4s6 1 8 4"/></svg><span>VR</span></button><button class="mode" data-mode="mr" title="MR в Quest 3: сцена в вашей комнате, сквозной режим"><svg viewBox="0 0 32 32"><path d="M4 12c0-2 1.5-3.5 3.5-3.5h17c2 0 3.5 1.5 3.5 3.5v7c0 2-1.5 3.5-3.5 3.5h-4l-2-3h-5l-2 3h-4C5.5 22.5 4 21 4 19z"/><path d="M9 27l3-3M23 27l-3-3" stroke-dasharray="2 2"/></svg><span>MR</span></button><button class="mode" data-mode="ar" title="AR через камеру телефона Android"><svg viewBox="0 0 32 32"><rect x="9" y="3" width="14" height="26" rx="3"/><path d="M14 25.5h4"/><path d="M12 15l4-4 4 4M12.5 14.5V19h7v-4.5"/></svg><span>AR</span></button></div><div id="frame"></div><div id="pauseBadge">⏸ пауза</div><div id="hint"></div><button id="legBtn" title="Что значат цвета">?</button><div id="toast"></div><button id="xrEnter"></button>
     <div id="legend">
       <div><i style="background:#111214"></i>точка</div>
       <div><i class="sq" style="background:#c8421f"></i>якорь</div>
@@ -271,7 +267,8 @@ const sun = new THREE.DirectionalLight(0xffffff, 1.3); sun.position.set(3, 6, 4)
 
 const CEIL = 3;       // высота потолка, м
 const HALF = 20;      // половина стороны пола, м (стены по краю)
-let half = HALF;      // в режиме «Телефон — наклон» — лоток поменьше, чтобы всё оставалось на экране
+let half = HALF;
+let VS = 1;           // размер точек и линий: в шлеме меньше, сцена там 1:1 вокруг вас      // в режиме «Телефон — наклон» — лоток поменьше, чтобы всё оставалось на экране
 
 const floor = new THREE.Mesh(new THREE.PlaneGeometry(HALF * 2, HALF * 2).rotateX(-Math.PI / 2),
   new THREE.MeshBasicMaterial({ color: 0xe6eaf0 }));
@@ -374,10 +371,10 @@ function updateVisuals() {
   S.points.forEach((p, i) => {
     const sl = sel.points.has(i) || i === connectFrom;
     if (p.a) {
-      _m.compose(_p.set(p.x, p.y, p.z), _q.identity(), _s.set(0.09, 0.09, 0.09));
+      _m.compose(_p.set(p.x, p.y, p.z), _q.identity(), _s.set(0.09 * VS, 0.09 * VS, 0.09 * VS));
       anchorMesh.setMatrixAt(na, _m); anchorMesh.setColorAt(na, sl ? C.sel : C.anchor); na++;
     } else {
-      _m.compose(_p.set(p.x, p.y, p.z), _q.identity(), _s.set(0.0525, 0.0525, 0.0525));
+      _m.compose(_p.set(p.x, p.y, p.z), _q.identity(), _s.set(0.0525 * VS, 0.0525 * VS, 0.0525 * VS));
       pointMesh.setMatrixAt(np, _m); pointMesh.setColorAt(np, sl ? C.sel : C.point); np++;
     }
   });
@@ -396,11 +393,11 @@ function updateVisuals() {
     if (sprV.has(i)) fs.push(C.spring);
     // нагрузка + угол — обычное состояние нарисованного, его не помечаем
     if (fs.length < 2 || !(p.a || sprV.has(i))) return;
-    const d = p.a ? 0.11 : 0.09;
+    const d = (p.a ? 0.11 : 0.09) * VS;
     fs.forEach((c, k) => {
       const t = Math.PI * 0.75 - k * Math.PI / 2.6;   // сверху слева по часовой
       const cx = Math.cos(t) * d, cy = Math.sin(t) * d;
-      _m.compose(_p.set(p.x + rx * cx + ux * cy, p.y + ry * cx + uy * cy, p.z + rz * cx + uz * cy), _q.identity(), _s.set(0.022, 0.022, 0.022));
+      _m.compose(_p.set(p.x + rx * cx + ux * cy, p.y + ry * cx + uy * cy, p.z + rz * cx + uz * cy), _q.identity(), _s.set(0.022 * VS, 0.022 * VS, 0.022 * VS));
       markMesh.setMatrixAt(nm, _m); markMesh.setColorAt(nm, c); nm++;
     });
   });
@@ -414,7 +411,7 @@ function updateVisuals() {
     const len = _d.length() || 1e-6; _d.divideScalar(len);
     _q.setFromUnitVectors(_up, _d);
     _p.set((a.x + b.x) / 2, (a.y + b.y) / 2, (a.z + b.z) / 2);
-    _m.compose(_p, _q, _s.set(0.012, len, 0.012));
+    _m.compose(_p, _q, _s.set(0.012 * VS, len, 0.012 * VS));
     linkMesh.setMatrixAt(nl, _m);
     const sl = sel.points.has(l.a) && sel.points.has(l.b);
     linkMesh.setColorAt(nl, sl ? C.sel : (l.k !== 0 ? C.spring : C.link));
@@ -1048,33 +1045,37 @@ function stopTilt() {
   window.removeEventListener('devicemotion', onMotion);
   tilt.on = false; half = HALF; tray.visible = false;
 }
-const modeEl = document.getElementById('mode'), xrEnterEl = document.getElementById('xrEnter');
+const xrEnterEl = document.getElementById('xrEnter');
+const modeBtns = [...document.querySelectorAll('#modebar .mode')];
 let mode = 'desk';
 function setMode(m) {
   if (mode === 'tilt' && m !== 'tilt') stopTilt();
-  mode = m; modeEl.value = m;
-  xrEnterEl.classList.remove('show');
+  mode = m;
+  modeBtns.forEach(b => b.classList.toggle('on', b.dataset.mode === m));
   if (m === 'tilt') startTilt();
-  else if (m === 'vr' || m === 'mr' || m === 'ar') {
-    xrEnterEl.textContent = { vr: '🥽 Войти в VR', mr: '🪟 Войти в MR', ar: '📷 Начать AR' }[m];
-    xrEnterEl.classList.add('show');
-  }
+  else if (m === 'vr' || m === 'mr' || m === 'ar') enterXR();   // нажатие на кнопку — сразу вход
 }
-modeEl.addEventListener('change', () => setMode(modeEl.value));
+// режим переключается нажатием на кнопку; недоступный — объясняем почему
+modeBtns.forEach(b => b.addEventListener('click', () => {
+  if (b.dataset.na) { toast(b.dataset.why); return; }
+  if (b.dataset.mode !== mode || b.dataset.mode === 'vr' || b.dataset.mode === 'mr' || b.dataset.mode === 'ar') setMode(b.dataset.mode);
+}));
 // какие режимы есть на этом устройстве
 (async () => {
   const xr = navigator.xr, ok = async t => { try { return !!xr && await xr.isSessionSupported(t); } catch { return false; } };
   const [vr, ar] = await Promise.all([ok('immersive-vr'), ok('immersive-ar')]);
   const touch = matchMedia('(pointer: coarse)').matches;
-  const mark = (v, on, why) => { const o = modeEl.querySelector(`option[value="${v}"]`); if (!on) o.textContent += ' — ' + why; o.dataset.na = on ? '' : '1'; };
-  mark('tilt', touch && typeof DeviceMotionEvent !== 'undefined', 'нужен телефон');
-  mark('vr', vr, 'нужен шлем');
-  mark('mr', ar && !touch, 'нужен Quest 3');
-  mark('ar', ar && touch, 'нужен Android');
+  const mark = (v, on, why) => { const o = modeBtns.find(b => b.dataset.mode === v); o.classList.toggle('na', !on); o.dataset.na = on ? '' : '1'; o.dataset.why = why; if (!on) o.title += ' — ' + why; };
+  mark('tilt', touch && typeof DeviceMotionEvent !== 'undefined', 'Наклон работает на телефоне: откройте Fizzik в браузере телефона');
+  mark('vr', vr, 'VR работает в шлеме: откройте Fizzik в браузере Quest');
+  mark('mr', ar && !touch, 'MR работает в Quest 3: откройте Fizzik в браузере шлема');
+  mark('ar', ar && touch, 'AR работает на телефоне Android в Chrome (на iPhone WebXR нет)');
 })();
 
 /* ---------- VR / MR (Quest) и AR (телефон Android) ---------- */
 let xrMode = null, xrSaved = null, lastT = 0;
+let xrTool = 'line';   // что делает курок в шлеме: line — линия, point — точка, anchor — якорь, erase — стереть
+let xrHints = true;     // подписи у контроллеров
 const hands = [0, 1].map(i => {
   const c = renderer.xr.getController(i);
   // кончик-перо: маленький шарик в 3 см впереди и короткий луч
@@ -1113,7 +1114,7 @@ function strokeMove(h, v) {
   const st = h.stroke; snapV(v); if (v.y < 0) v.y = 0;
   const last = S.points[st.last];
   const d = Math.hypot(v.x - last.x, v.y - last.y, v.z - last.z);
-  if (snapOn ? d < 1e-6 : d < 0.03) return;
+  if (snapOn ? d < 1e-6 : d < 0.05) return;   // в шлеме точки через 5 см
   let n = snapOn ? pointAt(v.x, v.y, v.z) : -1;
   if (n < 0) n = addPoint(v.x, v.y, v.z);
   if (n < 0) return;
@@ -1132,15 +1133,22 @@ function strokeEnd(h, v) {
 function xrFrame(frame) {
   const now = performance.now(), dt = Math.min(0.05, (now - (lastT || now)) / 1000); lastT = now;
   if (xrMode === 'ar') { arFrame(frame); return; }
+  syncXrUi();
+  menuHover = null; rayLine.visible = false;
   for (const h of hands) {
     const gp = h.src && h.src.gamepad; if (!gp) continue;
     const b = gp.buttons.map(x => !!(x && x.pressed)), was = h.prev; h.prev = b;
     const down = k => b[k] && !was[k];
     tipPos(h, _tip);
-    // курок — рисовать
-    if (b[0] && !h.stroke && !was[0]) strokeStart(h, _tip.clone());
-    else if (b[0] && h.stroke) strokeMove(h, _tip.clone());
-    else if (!b[0] && h.stroke) strokeEnd(h, _tip.clone());
+    // правый контроллер наведён на меню левой руки — курок нажимает кнопку меню
+    const onMenu = h.src.handedness === 'right' && !h.stroke && menuRay(h);
+    if (onMenu) { if (down(0)) { menuClick(); buzz(h, 0.3, 15); } }
+    // курок — инструмент из меню: линия, точка, якорь, стереть
+    else if (xrTool === 'line') {
+      if (b[0] && !h.stroke && !was[0]) strokeStart(h, _tip.clone());
+      else if (b[0] && h.stroke) strokeMove(h, _tip.clone());
+      else if (!b[0] && h.stroke) strokeEnd(h, _tip.clone());
+    } else if (down(0)) xrToolClick(h, _tip.clone());
     // грип — схватить точку и тянуть
     if (down(1)) { const j = nearPoint(_tip, 0.08); if (j >= 0) { pullIdx = j; h.grab = true; buzz(h, 0.5, 30); } }
     if (h.grab && b[1]) { pullTarget.copy(_tip); if (paused && S.points[pullIdx]) { const p = S.points[pullIdx]; p.x = p.px = _tip.x; p.y = p.py = _tip.y; p.z = p.pz = _tip.z; } }
@@ -1168,7 +1176,141 @@ function xrFrame(frame) {
       if (down(5)) { undo(); buzz(h); }               // B — назад
     }
   }
+  if (menuHover !== menuDrawn) drawMenu();
 }
+function xrToolClick(h, v) {
+  if (xrTool === 'point') {
+    snapV(v); if (v.y < 0) v.y = 0;
+    if (nearPoint(v, 0.03) < 0 && addPoint(v.x, v.y, v.z) >= 0) { pushHist(); buzz(h, 0.3, 15); }
+    return;
+  }
+  const j = nearPoint(v, 0.08); if (j < 0) { buzz(h, 0.1, 10); return; }
+  if (xrTool === 'anchor') { const p = S.points[j]; p.a = !p.a; p.px = p.x; p.py = p.y; p.pz = p.z; if (p.a) p.f = null; }
+  else if (xrTool === 'erase') erasePoint(j);
+  pushHist(); buzz(h, 0.4, 25);
+}
+
+/* меню на левой руке (как в VRtrip): правый контроллер наводит луч и нажимает курком */
+function rr(c, x, y, w, h, r) { c.beginPath(); if (c.roundRect) c.roundRect(x, y, w, h, r); else c.rect(x, y, w, h); }
+function txt(c, t, x, y, size, color, weight = 600, align = 'center') { c.font = `${weight} ${size}px system-ui, sans-serif`; c.fillStyle = color; c.textAlign = align; c.textBaseline = 'middle'; c.fillText(t, x, y); }
+function makePanel(W, H, widthM) {
+  const cv2 = document.createElement('canvas'); cv2.width = W; cv2.height = H;
+  const tex = new THREE.CanvasTexture(cv2); tex.colorSpace = THREE.SRGBColorSpace;
+  const mesh = new THREE.Mesh(new THREE.PlaneGeometry(widthM, widthM * H / W), new THREE.MeshBasicMaterial({ map: tex, transparent: true, depthTest: false }));
+  mesh.renderOrder = 20;
+  return { W, H, cv: cv2, ctx: cv2.getContext('2d'), tex, mesh };
+}
+const menu = makePanel(1024, 1000, 0.26);
+let menuBtns = [], menuHover = null, menuDrawn = undefined;
+const ACC = '#ff5a2b', INK = '#16181d';
+function drawMenu() {
+  const c = menu.ctx, W = menu.W; menuDrawn = menuHover; menuBtns = [];
+  c.clearRect(0, 0, W, menu.H);
+  rr(c, 0, 0, W, menu.H, 44); c.fillStyle = 'rgba(255,255,255,0.96)'; c.fill();
+  txt(c, 'Fizzik', 48, 64, 54, INK, 800, 'left');
+  txt(c, paused ? '⏸ пауза' : '▶ физика идёт', W - 48, 64, 36, paused ? ACC : '#7b818f', 700, 'right');
+  const btn = (id, label, x, y, w, h, on = false, size = 38) => {
+    menuBtns.push({ id, x, y, w, h });
+    rr(c, x, y, w, h, 22); c.fillStyle = on ? ACC : (menuHover === id ? '#e4e7ee' : '#f1f2f5'); c.fill();
+    if (menuHover === id) { c.lineWidth = 5; c.strokeStyle = INK; c.stroke(); }
+    txt(c, label, x + w / 2, y + h / 2 + 2, size, on ? '#fff' : INK, 650);
+  };
+  const sec = (t, y) => txt(c, t, 48, y, 30, '#7b818f', 700, 'left');
+  let y = 120;
+  btn('pause', paused ? '▶ Продолжить' : '⏸ Пауза', 40, y, 430, 110, paused, 42);
+  btn('undo', '↶ Назад', 486, y, 240, 110); btn('redo', '↷ Вперёд', 742, y, 242, 110);
+  y += 150; sec('КУРОК ДЕЛАЕТ', y); y += 30;
+  [['line', '✎ Линия'], ['point', '• Точка'], ['anchor', '⚓ Якорь'], ['erase', '✕ Стереть']].forEach(([id, l], k) => btn('t:' + id, l, 40 + k * 238, y, 222, 100, xrTool === id, 36));
+  y += 140; sec('СЕТКА', y); y += 30;
+  btn('snap', snapOn ? '# Сетка: вкл' : '# Сетка: выкл', 40, y, 340, 100, snapOn, 36);
+  [['0.1', '10 см'], ['0.25', '25 см'], ['0.5', '50 см']].forEach(([v, l], k) => btn('step:' + v, l, 396 + k * 198, y, 184, 100, snapOn && +v === snapStep, 34));
+  y += 140; sec('НОВЫЕ ФИГУРЫ', y); y += 30;
+  btn('grav', autoLoad ? '↓ Гравитация: да' : '↓ Гравитация: нет', 40, y, 460, 100, autoLoad, 34);
+  btn('ang', autoAngle ? '∠ Жёсткие углы: да' : '∠ Жёсткие углы: нет', 516, y, 468, 100, autoAngle, 34);
+  y += 140;
+  btn('hints', xrHints ? '? Подписи: вкл' : '? Подписи: выкл', 40, y, 300, 100, xrHints, 34);
+  btn('clear', '🗑 Очистить', 356, y, 300, 100, false, 34);
+  btn('exit', '⏏ Выйти', 672, y, 312, 100, false, 36);
+  menu.tex.needsUpdate = true;
+}
+function menuClick() {
+  const id = menuHover; if (!id) return;
+  if (id === 'pause') setPaused(!paused);
+  else if (id === 'undo') undo();
+  else if (id === 'redo') redo();
+  else if (id.startsWith('t:')) xrTool = id.slice(2);
+  else if (id === 'snap') { snapEl.checked = !snapEl.checked; applySnap(); }
+  else if (id.startsWith('step:')) { snapStepEl.value = id.slice(5); snapEl.checked = true; applySnap(); }
+  else if (id === 'grav') { document.getElementById('autoLoad').checked = !autoLoad; applySnap(); }
+  else if (id === 'ang') { document.getElementById('autoAngle').checked = !autoAngle; applySnap(); }
+  else if (id === 'hints') xrHints = !xrHints;
+  else if (id === 'clear') document.getElementById('clear').click();
+  else if (id === 'exit') { const se = renderer.xr.getSession(); if (se) se.end(); return; }
+  drawMenu(); drawCards();
+}
+const menuHolder = new THREE.Group();
+menuHolder.add(menu.mesh);
+menuHolder.rotation.set(-1.0, 0, 0);
+menuHolder.position.set(0, 0.11, -0.06);   // над левым контроллером, наклонено к лицу
+const rayLine = new THREE.Line(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3(0, 0, -1)]),
+  new THREE.LineBasicMaterial({ color: 0xff5a2b, depthTest: false, transparent: true }));
+rayLine.renderOrder = 21; rayLine.frustumCulled = false; rayLine.visible = false; scene.add(rayLine);
+const _rc = new THREE.Raycaster();
+function menuRay(h) {
+  if (!menuHolder.parent || !menuHolder.parent.visible) return false;
+  const o = new THREE.Vector3().setFromMatrixPosition(h.c.matrixWorld);
+  const d = new THREE.Vector3(0, 0, -1).transformDirection(h.c.matrixWorld);
+  _rc.set(o, d); _rc.far = 0.8;
+  const hit = _rc.intersectObject(menu.mesh, false)[0];
+  if (!hit) return false;
+  const x = hit.uv.x * menu.W, y = (1 - hit.uv.y) * menu.H;
+  const b = menuBtns.find(q => x >= q.x && x <= q.x + q.w && y >= q.y && y <= q.y + q.h);
+  menuHover = b ? b.id : null;
+  rayLine.geometry.setFromPoints([o, hit.point]); rayLine.visible = true;
+  return true;
+}
+
+/* подписи у контроллеров: схема контроллера и что делает каждая кнопка */
+const cards = { left: makePanel(640, 520, 0.13), right: makePanel(640, 520, 0.13) };
+const TOOL_NAME = { line: 'рисовать линию', point: 'поставить точку', anchor: 'якорь', erase: 'стереть точку' };
+function drawCards() {
+  for (const side of ['left', 'right']) {
+    const p = cards[side], c = p.ctx, W = p.W, H = p.H, L = side === 'left';
+    c.clearRect(0, 0, W, H);
+    rr(c, 0, 0, W, H, 36); c.fillStyle = 'rgba(22,24,29,0.88)'; c.fill();
+    // схема: корпус контроллера, стик и две кнопки
+    const cx = L ? 430 : 210, cy = 200;
+    c.beginPath(); c.ellipse(cx, cy, 150, 120, 0, 0, Math.PI * 2); c.strokeStyle = '#5b606b'; c.lineWidth = 6; c.stroke();
+    const dot = (x, y, r, t, col) => { c.beginPath(); c.arc(x, y, r, 0, Math.PI * 2); c.fillStyle = col; c.fill(); txt(c, t, x, y + 2, r * 1.05, '#fff', 800); };
+    const stick = [cx + (L ? 40 : -40), cy - 45], b1 = [cx + (L ? -60 : 60), cy + 15], b2 = [cx + (L ? -15 : 15), cy + 70];
+    dot(stick[0], stick[1], 34, '◎', '#3a3f4a');
+    dot(b1[0], b1[1], 30, L ? 'Y' : 'B', '#3a3f4a');
+    dot(b2[0], b2[1], 30, L ? 'X' : 'A', ACC);
+    const tx = L ? 24 : W - 24, al = L ? 'left' : 'right';
+    const line = (y, k, t) => { txt(c, k, tx, y, 30, '#ff9c80', 800, al); txt(c, t, tx, y + 34, 30, '#fff', 600, al); };
+    if (L) { line(60, 'СТИК', 'ходить'); line(140, 'Y', 'вперёд ↷'); line(220, 'X', 'сетка #'); }
+    else { line(60, 'СТИК', '↔ поворот ↕ высота'); line(140, 'B', 'назад ↶'); line(220, 'A', paused ? 'продолжить ▶' : 'пауза ⏸'); }
+    txt(c, 'КУРОК', 40, 380, 30, '#ff9c80', 800, 'left'); txt(c, '— ' + TOOL_NAME[xrTool], 160, 380, 30, '#fff', 600, 'left');
+    txt(c, 'ГРИП', 40, 430, 30, '#ff9c80', 800, 'left'); txt(c, '— схватить и тянуть', 160, 430, 30, '#fff', 600, 'left');
+    if (!L) txt(c, 'наведите на меню и нажмите курок', W / 2, 485, 26, '#9aa0ab', 600);
+    else txt(c, 'меню — над этой рукой', W / 2, 485, 26, '#9aa0ab', 600);
+    p.tex.needsUpdate = true;
+  }
+}
+cards.left.mesh.position.set(-0.05, 0.04, 0.05); cards.left.mesh.rotation.set(-0.9, 0.35, 0);
+cards.right.mesh.position.set(0.05, 0.04, 0.05); cards.right.mesh.rotation.set(-0.9, -0.35, 0);
+let cardsPaused = null, cardsTool = null;
+function syncXrUi() {   // привязать меню и подписи к рукам, обновить при смене
+  for (const h of hands) {
+    const side = h.src && h.src.handedness; if (!side || !h.src.gamepad) continue;
+    const card = cards[side].mesh;
+    if (card.parent !== h.c) h.c.add(card);
+    if (side === 'left' && menuHolder.parent !== h.c) h.c.add(menuHolder);
+  }
+  cards.left.mesh.visible = cards.right.mesh.visible = xrHints;
+  if (cardsPaused !== paused || cardsTool !== xrTool) { cardsPaused = paused; cardsTool = xrTool; drawCards(); drawMenu(); }
+}
+
 // где встанет точка: у кончика правого (или любого) контроллера
 function xrCursor() {
   const h = hands.find(x => x.src && x.src.handedness === 'right' && x.src.gamepad) || hands.find(x => x.src && x.src.gamepad);
@@ -1237,10 +1379,10 @@ async function enterXR() {
     : { requiredFeatures: ['local-floor'], optionalFeatures: ['hand-tracking'] };
   let session;
   try { renderer.xr.setReferenceSpaceType(m === 'ar' ? 'local' : 'local-floor'); session = await navigator.xr.requestSession(type, opts); }
-  catch (err) { toast(m === 'vr' ? 'VR недоступен: нужен шлем (Quest) и браузер с WebXR' : m === 'mr' ? 'MR недоступен: нужен Quest 3 (сквозной режим)' : 'AR недоступен: нужен телефон Android с Chrome', 4000); return; }
+  catch (err) { setMode('desk'); toast(m === 'vr' ? 'VR недоступен: нужен шлем (Quest) и браузер с WebXR' : m === 'mr' ? 'MR недоступен: нужен Quest 3 (сквозной режим)' : 'AR недоступен: нужен телефон Android с Chrome', 4000); return; }
   xrMode = m;
   xrSaved = { pos: camera.position.clone(), quat: camera.quaternion.clone(), target: orbit.target.clone(), clear: renderer.getClearColor(new THREE.Color()), alpha: renderer.getClearAlpha() };
-  orbit.enabled = false; tc.detach();
+  orbit.enabled = false; tc.detach(); VS = 0.3;   // в шлеме сцена 1:1 — точки и линии тоньше
   rig.position.set(0, 0, m === 'ar' ? 0 : 2.5); rig.rotation.set(0, 0, 0);   // в VR/MR встаём в 2,5 м перед сценой
   if (m !== 'vr') { renderer.setClearColor(0x000000, 0); floorShow(m === 'ar'); }
   if (m === 'ar') {
@@ -1250,18 +1392,17 @@ async function enterXR() {
   }
   session.addEventListener('end', exitXR);
   await renderer.xr.setSession(session);
-  xrEnterEl.classList.remove('show');
 }
 function exitXR() {
   for (const h of hands) { h.stroke = null; h.grab = false; }
   pullIdx = -1; hitSrc = null; reticle.visible = false; arUi.classList.remove('on');
   rig.position.set(0, 0, 0); rig.rotation.set(0, 0, 0);
   if (xrSaved) { camera.position.copy(xrSaved.pos); camera.quaternion.copy(xrSaved.quat); orbit.target.copy(xrSaved.target); renderer.setClearColor(xrSaved.clear, xrSaved.alpha); }
-  floorShow(true); orbit.enabled = true; orbit.update(); xrMode = null; lastT = 0;
+  floorShow(true); orbit.enabled = true; orbit.update(); xrMode = null; lastT = 0; VS = 1;
+  rayLine.visible = false;
   resize(); updateGizmo();
-  if (mode === 'vr' || mode === 'mr' || mode === 'ar') xrEnterEl.classList.add('show');
+  setMode('desk');
 }
-xrEnterEl.addEventListener('click', enterXR);
 
 /* ---------- интерфейс ---------- */
 const hints = {
@@ -1552,7 +1693,21 @@ pushHist();
 renderer.setAnimationLoop(tick);   // один цикл и для экрана, и для шлема
 
 // для автопроверок
-window.__fizzik = { get rigid() { return rigid; }, renderer, rig, hands, get paused() { return paused; }, get mode() { return mode; }, get xrMode() { return xrMode; }, tilt, get marks() { return markMesh.count; },
+window.__fizzik = { get rigid() { return rigid; }, get VS() { return VS; }, get xrTool() { return xrTool; }, menuHolder, cards,
+  // для автотестов: куда поставить правый контроллер, чтобы луч попал в кнопку меню (в осях «тележки»)
+  menuAim(id) {
+    drawMenu(); const b = menuBtns.find(q => q.id === id); if (!b) return null;
+    menu.mesh.updateMatrixWorld(true);
+    const u = (b.x + b.w / 2) / menu.W, v = 1 - (b.y + b.h / 2) / menu.H;
+    const pw = menu.mesh.geometry.parameters.width, ph = menu.mesh.geometry.parameters.height;
+    const t = new THREE.Vector3((u - 0.5) * pw, (v - 0.5) * ph, 0).applyMatrix4(menu.mesh.matrixWorld);
+    const n = new THREE.Vector3(0, 0, 1).transformDirection(menu.mesh.matrixWorld);
+    const p = t.clone().addScaledVector(n, 0.15);
+    const q = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 0, -1), n.clone().negate());
+    rig.updateMatrixWorld(true); const inv = rig.matrixWorld.clone().invert();
+    const pl = p.applyMatrix4(inv), rq = rig.getWorldQuaternion(new THREE.Quaternion()).invert().multiply(q);
+    return { p: pl.toArray(), q: [rq.x, rq.y, rq.z, rq.w] };
+  }, renderer, rig, hands, get paused() { return paused; }, get mode() { return mode; }, get xrMode() { return xrMode; }, tilt, get marks() { return markMesh.count; },
   S, sel, tc, pivot, camera, orbit, step, serialize, restore, pushHist,
   project: (x, y, z) => { const s = toScreen(x, y, z); return { x: s.x, y: s.y, ok: s.ok }; },
   size: () => ({ W, H })
