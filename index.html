@@ -121,7 +121,7 @@
     </section>
 
     <section>
-      <h2>Рисование <i class="tip" data-tip="Новые фигуры сразу получают гравитацию и жёсткие углы — можно выключить. Плоскость: «Вид» — перпендикулярно взгляду, как на экране; XY / XZ / YZ — строго в плоскости осей. Плоскость проходит через центр обзора и не меняется, пока тянете штрих. Привязка ставит точки и гизмо в узлы 3D-сетки.">i</i></h2>
+      <h2>Рисование <i class="tip" data-tip="Новые фигуры сразу получают гравитацию и жёсткие углы — можно выключить. Оси как в Rhino: Z вверх. Плоскость: «Вид» — перпендикулярно взгляду, как на экране, без сетки; XY — горизонтальная (как пол), XZ — фронтальная, YZ — боковая, с сеткой. Плоскость проходит через центр обзора и не меняется, пока тянете штрих. Привязка ставит точки и гизмо в узлы 3D-сетки.">i</i></h2>
       <label class="chk"><input type="checkbox" id="autoLoad" checked> Гравитация</label>
       <label class="chk"><input type="checkbox" id="autoAngle" checked> Жёсткие углы</label>
       <div class="chk"><label><input type="checkbox" id="snap"> Сетка</label>
@@ -140,14 +140,14 @@
     </section>
 
     <section>
-      <h2>Нагрузка <i class="tip" data-tip="Вектор силы для выбранных точек (если ничего не выбрано — для всех). Направление — кнопкой, сила — ползунком от 0 до 2. «✕» снимает нагрузку. Точки с нагрузкой синие.">i</i></h2>
+      <h2>Нагрузка <i class="tip" data-tip="Вектор силы для выбранных точек (если ничего не выбрано — для всех). Направление — кнопкой (оси как в Rhino: ↓ = −Z), сила — ползунком от 0 до 2. «✕» снимает нагрузку. Точки с нагрузкой синие.">i</i></h2>
       <div class="seg" id="dirs">
-        <button data-d="0,-1,0" title="Вниз (гравитация)">↓</button>
-        <button data-d="0,1,0" title="Вверх">↑</button>
+        <button data-d="0,-1,0" title="Вниз, −Z (гравитация)">↓</button>
+        <button data-d="0,1,0" title="Вверх, +Z">↑</button>
         <button data-d="-1,0,0" title="−X">−X</button>
         <button data-d="1,0,0" title="+X">+X</button>
-        <button data-d="0,0,-1" title="−Z">−Z</button>
-        <button data-d="0,0,1" title="+Z">+Z</button>
+        <button data-d="0,0,1" title="−Y (к зрителю на виде спереди)">−Y</button>
+        <button data-d="0,0,-1" title="+Y (вглубь на виде спереди)">+Y</button>
         <button id="loadOff" title="Снять нагрузку">✕</button>
       </div>
       <label class="sl"><span>Сила</span><input type="range" id="load" min="0" max="2" step="0.05" value="1"><b id="loadVal">1.00</b></label>
@@ -168,7 +168,7 @@
     </section>
 
     <section>
-      <h2>Файл <i class="tip" data-tip="JSON — вся работа, чтобы открыть и продолжить. OBJ — линии и точки в текущем положении (1 = 1 м, ось Y вверх). PNG — картинка сцены.">i</i></h2>
+      <h2>Файл <i class="tip" data-tip="JSON — вся работа, чтобы открыть и продолжить. OBJ — линии и точки в текущем положении (1 = 1 м, ось Z вверх, как в Rhino). PNG — картинка сцены.">i</i></h2>
       <div class="seg"><button id="expJson">JSON</button><button id="expObj">OBJ</button><button id="expPng">PNG</button></div>
       <div class="seg"><button id="openJson">Открыть…</button><button id="clear">Очистить</button></div>
       <input type="file" id="file" accept=".json,application/json" hidden>
@@ -443,6 +443,7 @@ const pivot = new THREE.Object3D(); scene.add(pivot);
 const lastPivot = new THREE.Vector3();
 const tc = new TransformControls(camera, cv);
 tc.setSize(0.9);
+tc.setColors(0xff3b30, 0x2f6bff, 0x22b14c, 0xffc400);   // как в Rhino: X красный, Z (вверх) синий, Y (вглубь) зелёный
 scene.add(tc.getHelper());
 tc.addEventListener('dragging-changed', e => {
   orbit.enabled = !e.value;
@@ -568,7 +569,9 @@ function component(i) {
   }
   return seen;
 }
-const NORMALS = { XY: [0, 0, 1], XZ: [0, 1, 0], YZ: [1, 0, 0] };
+// оси как в Rhino: Z вверх, XY — горизонтальная плоскость (пол), XZ — фронтальная, YZ — боковая.
+// Внутри расчёт ведётся в осях three.js (y вверх): Rhino (X, Y, Z) = three (x, −z, y)
+const NORMALS = { XY: [0, 1, 0], XZ: [0, 0, 1], YZ: [1, 0, 0] };
 const sn = v => { const r = Math.round(v / snapStep) * snapStep; return Object.is(r, -0) ? 0 : +r.toFixed(6); };
 // центр плоскости рисования: точка обзора, а с привязкой — ближайший узел сетки
 function planeCenter(out) {
@@ -1139,8 +1142,8 @@ document.getElementById('expJson').addEventListener('click', () =>
   download('fizzik.json', new Blob([serialize()], { type: 'application/json' })));
 
 document.getElementById('expObj').addEventListener('click', () => {
-  let s = '# Fizzik: линии и точки (положение после провисания)\n# 1 единица = 1 м, ось Y вверх\no fizzik\n';
-  S.points.forEach(p => { s += `v ${p.x.toFixed(4)} ${p.y.toFixed(4)} ${p.z.toFixed(4)}\n`; });
+  let s = '# Fizzik: линии и точки (положение после провисания)\n# 1 единица = 1 м, ось Z вверх (как в Rhino)\no fizzik\n';
+  S.points.forEach(p => { s += `v ${p.x.toFixed(4)} ${(p.z === 0 ? 0 : -p.z).toFixed(4)} ${p.y.toFixed(4)}\n`; });
   const used = new Set();
   S.links.forEach(l => { used.add(l.a); used.add(l.b); s += `l ${l.a + 1} ${l.b + 1}\n`; });
   S.points.forEach((_, i) => { if (!used.has(i)) s += `p ${i + 1}\n`; });
@@ -1183,7 +1186,8 @@ function tick() {
   // плоскость рисования и стрелка нагрузки
   const onPlane = tool === 'draw' || tool === 'point' || tool === 'connect';
   guide.visible = false;   // заливку плоскости не показываем — только сетку
-  gridHelper.visible = onPlane && (snapOn || (drawing ? drawing.planeName : plane) !== 'VIEW');
+  const pn = drawing ? drawing.planeName : plane;
+  gridHelper.visible = onPlane && pn !== 'VIEW';   // «Вид» — просто вид, без сетки
   if (onPlane) {
     const n = planeNormal(drawing ? drawing.planeName : plane);
     planeCenter(guide.position);
@@ -1191,9 +1195,8 @@ function tick() {
     guide.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), n);
     gridHelper.position.copy(guide.position);
     // сетка: для «Вида» — та плоскость осей, что ближе всего к взгляду
-    let gp = plane;
-    if (gp === 'VIEW') { const ax = Math.abs(n.x), ay = Math.abs(n.y), az = Math.abs(n.z); gp = az >= ax && az >= ay ? 'XY' : (ay >= ax ? 'XZ' : 'YZ'); }
-    gridHelper.rotation.set(gp === 'XY' ? Math.PI / 2 : 0, 0, gp === 'YZ' ? Math.PI / 2 : 0);
+    // GridHelper лежит горизонтально (= XY в осях Rhino); XZ и YZ — поворот в вертикаль
+    gridHelper.rotation.set(pn === 'XZ' ? Math.PI / 2 : 0, 0, pn === 'YZ' ? Math.PI / 2 : 0);
   }
   // стрелка нагрузки у выбранных точек
   const fp = sel.points.size ? [...sel.points].map(i => S.points[i]).find(p => p && p.f && p.f.s > 0) : null;
