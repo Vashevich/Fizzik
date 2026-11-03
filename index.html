@@ -1074,8 +1074,8 @@ modeBtns.forEach(b => b.addEventListener('click', () => {
 
 /* ---------- VR / MR (Quest) и AR (телефон Android) ---------- */
 let xrMode = null, xrSaved = null, lastT = 0;
-let xrTool = 'line';   // что делает курок в шлеме: line — линия, point — точка, anchor — якорь, erase — стереть
-let xrHints = true;     // подписи у контроллеров
+let xrTool = 'draw';   // инструмент курка в шлеме — те же, что на экране
+let xrHints = false;    // подписи у контроллеров: по умолчанию спрятаны, «?» в меню показывает
 const hands = [0, 1].map(i => {
   const c = renderer.xr.getController(i);
   // кончик-перо: маленький шарик в 3 см впереди и короткий луч
@@ -1135,6 +1135,7 @@ function xrFrame(frame) {
   if (xrMode === 'ar') { arFrame(frame); return; }
   syncXrUi();
   menuHover = null; rayLine.visible = false;
+  for (const h of hands) { if (h.mark) h.mark.visible = false; if (h.rub) h.rub.visible = false; }
   for (const h of hands) {
     const gp = h.src && h.src.gamepad; if (!gp) continue;
     const b = gp.buttons.map(x => !!(x && x.pressed)), was = h.prev; h.prev = b;
@@ -1143,12 +1144,21 @@ function xrFrame(frame) {
     // правый контроллер наведён на меню левой руки — курок нажимает кнопку меню
     const onMenu = h.src.handedness === 'right' && !h.stroke && menuRay(h);
     if (onMenu) { if (down(0)) { menuClick(); buzz(h, 0.3, 15); } }
-    // курок — инструмент из меню: линия, точка, якорь, стереть
-    else if (xrTool === 'line') {
+    // курок — инструмент из меню, как на экране
+    else if (xrTool === 'draw') {
       if (b[0] && !h.stroke && !was[0]) strokeStart(h, _tip.clone());
       else if (b[0] && h.stroke) strokeMove(h, _tip.clone());
       else if (!b[0] && h.stroke) strokeEnd(h, _tip.clone());
+    } else if (xrTool === 'select') {
+      if (down(0) && nearPoint(_tip, 0.05) < 0) { sel.points.clear(); h.brushed = false; }
+      if (b[0]) S.points.forEach((p, i) => { if ((p.x - _tip.x) ** 2 + (p.y - _tip.y) ** 2 + (p.z - _tip.z) ** 2 < 0.05 * 0.05 && !sel.points.has(i)) { sel.points.add(i); buzz(h, 0.1, 6); } });
+      if (!b[0] && was[0]) { syncSpring(); syncLoad(); syncAngleSoft(); }
+    } else if (xrTool === 'pull') {
+      if (down(0)) { const j = nearPoint(_tip, 0.08); if (j >= 0) { pullIdx = j; h.tgrab = true; buzz(h, 0.5, 30); } }
+      if (h.tgrab && b[0]) { pullTarget.copy(_tip); if (paused && S.points[pullIdx]) { const p = S.points[pullIdx]; p.x = p.px = _tip.x; p.y = p.py = _tip.y; p.z = p.pz = _tip.z; } }
+      if (h.tgrab && !b[0]) { h.tgrab = false; pullIdx = -1; pushHist(); }
     } else if (down(0)) xrToolClick(h, _tip.clone());
+    xrHover(h, _tip);
     // грип — схватить точку и тянуть
     if (down(1)) { const j = nearPoint(_tip, 0.08); if (j >= 0) { pullIdx = j; h.grab = true; buzz(h, 0.5, 30); } }
     if (h.grab && b[1]) { pullTarget.copy(_tip); if (paused && S.points[pullIdx]) { const p = S.points[pullIdx]; p.x = p.px = _tip.x; p.y = p.py = _tip.y; p.z = p.pz = _tip.z; } }
@@ -1178,16 +1188,73 @@ function xrFrame(frame) {
   }
   if (menuHover !== menuDrawn) drawMenu();
 }
+function linkNear(v, r) {   // ближайшая линия к кончику (для «Стереть»)
+  let best = -1, bd = r;
+  S.links.forEach((l, i) => {
+    const A = S.points[l.a], B = S.points[l.b];
+    const dx = B.x - A.x, dy = B.y - A.y, dz = B.z - A.z, L2 = dx * dx + dy * dy + dz * dz || 1e-9;
+    const t = Math.max(0, Math.min(1, ((v.x - A.x) * dx + (v.y - A.y) * dy + (v.z - A.z) * dz) / L2));
+    const d = Math.hypot(A.x + dx * t - v.x, A.y + dy * t - v.y, A.z + dz * t - v.z);
+    if (d < bd) { bd = d; best = i; }
+  });
+  return best;
+}
 function xrToolClick(h, v) {
+  const R = 0.06;
   if (xrTool === 'point') {
     snapV(v); if (v.y < 0) v.y = 0;
     if (nearPoint(v, 0.03) < 0 && addPoint(v.x, v.y, v.z) >= 0) { pushHist(); buzz(h, 0.3, 15); }
     return;
   }
-  const j = nearPoint(v, 0.08); if (j < 0) { buzz(h, 0.1, 10); return; }
+  const j = nearPoint(v, R);
+  if (xrTool === 'connect') {
+    if (j < 0) { h.cFrom = -1; return; }
+    if (h.cFrom == null || h.cFrom < 0 || !S.points[h.cFrom]) { h.cFrom = j; buzz(h, 0.3, 15); return; }
+    if (j === h.cFrom) { h.cFrom = -1; return; }
+    const n = S.links.length; addLink(h.cFrom, j);
+    if (S.links.length > n) { if (autoAngle) fixAngles([h.cFrom, j]); pushHist(); buzz(h, 0.5, 25); }
+    h.cFrom = j;   // цепочка: следующая точка соединится с этой
+    return;
+  }
+  if (xrTool === 'erase') {
+    if (j >= 0) { erasePoint(j); pushHist(); buzz(h, 0.5, 25); return; }
+    const l = linkNear(v, 0.04); if (l >= 0) { S.links.splice(l, 1); pruneAngles(); pushHist(); buzz(h, 0.5, 25); }
+    return;
+  }
+  if (j < 0) { buzz(h, 0.1, 10); return; }
   if (xrTool === 'anchor') { const p = S.points[j]; p.a = !p.a; p.px = p.x; p.py = p.y; p.pz = p.z; if (p.a) p.f = null; }
-  else if (xrTool === 'erase') erasePoint(j);
+  else if (xrTool === 'angle') { if (S.angles.some(g => g.b === j)) releaseAngles([j]); else fixAngles([j]); }
   pushHist(); buzz(h, 0.4, 25);
+}
+// подсветка: что под кончиком и что с ним сделает инструмент
+const HOVER_COL = { draw: 0xff5a2b, point: 0xff5a2b, connect: 0x2f9e44, select: 0xff5a2b, pull: 0x2f6bff, anchor: 0xc8421f, angle: 0x7b3fa0, erase: 0xff2020 };
+function xrHover(h, tip) {
+  if (!h.mark) {
+    h.mark = new THREE.Mesh(new THREE.SphereGeometry(1, 16, 10), new THREE.MeshBasicMaterial({ color: 0xff5a2b, transparent: true, opacity: 0.45, depthWrite: false }));
+    h.mark.renderOrder = 15; scene.add(h.mark);
+    h.rub = new THREE.Line(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3()]), new THREE.LineBasicMaterial({ color: 0x2f9e44 }));
+    h.rub.frustumCulled = false; scene.add(h.rub);
+    h.linkMark = new THREE.Mesh(new THREE.CylinderGeometry(1, 1, 1, 8), new THREE.MeshBasicMaterial({ color: 0xff2020, transparent: true, opacity: 0.5, depthWrite: false }));
+    h.linkMark.frustumCulled = false; scene.add(h.linkMark);
+  }
+  h.mark.visible = false; h.rub.visible = false; h.linkMark.visible = false;
+  if (h.stroke && xrTool === 'draw') return;
+  const j = h.grab || h.tgrab ? pullIdx : nearPoint(tip, xrTool === 'select' ? 0.05 : 0.06);
+  const col = h.grab ? HOVER_COL.pull : (HOVER_COL[xrTool] || 0xff5a2b);
+  if (j >= 0 && S.points[j] && xrTool !== 'point') {
+    const p = S.points[j]; h.mark.position.set(p.x, p.y, p.z); h.mark.scale.setScalar(0.03); h.mark.material.color.setHex(col); h.mark.visible = true;
+  } else if (xrTool === 'erase') {
+    const l = linkNear(tip, 0.04);
+    if (l >= 0) {
+      const A = S.points[S.links[l].a], B = S.points[S.links[l].b];
+      _p.set((A.x + B.x) / 2, (A.y + B.y) / 2, (A.z + B.z) / 2); _d.set(B.x - A.x, B.y - A.y, B.z - A.z);
+      const len = _d.length(); h.linkMark.position.copy(_p); h.linkMark.quaternion.setFromUnitVectors(_up, _d.normalize()); h.linkMark.scale.set(0.012, len, 0.012); h.linkMark.visible = true;
+    }
+  }
+  if (xrTool === 'connect' && h.cFrom >= 0 && S.points[h.cFrom]) {   // резинка от первой точки к кончику
+    const a = S.points[h.cFrom], g = h.rub.geometry.attributes.position;
+    g.setXYZ(0, a.x, a.y, a.z); g.setXYZ(1, tip.x, tip.y, tip.z); g.needsUpdate = true; h.rub.visible = true;
+  }
 }
 
 /* меню на левой руке (как в VRtrip): правый контроллер наводит луч и нажимает курком */
@@ -1200,58 +1267,76 @@ function makePanel(W, H, widthM) {
   mesh.renderOrder = 20;
   return { W, H, cv: cv2, ctx: cv2.getContext('2d'), tex, mesh };
 }
-const menu = makePanel(1024, 1000, 0.26);
+const menu = makePanel(1024, 1720, 0.27);
 let menuBtns = [], menuHover = null, menuDrawn = undefined;
 const ACC = '#ff5a2b', INK = '#16181d';
+const XR_TOOLS = [['draw', 'Рисовать'], ['point', 'Точка'], ['connect', 'Соединить'], ['select', 'Выбрать'], ['pull', 'Тянуть'], ['unsel', 'Снять выбор'], ['anchor', 'Якорь'], ['angle', 'Угол'], ['erase', 'Стереть']];
+const loadDir = () => { const pts = sel.points.size ? [...sel.points].map(i => S.points[i]) : S.points; const p = pts.find(q => q && q.f); return p ? [p.f.dx, p.f.dy, p.f.dz].join(',') : ''; };
 function drawMenu() {
   const c = menu.ctx, W = menu.W; menuDrawn = menuHover; menuBtns = [];
   c.clearRect(0, 0, W, menu.H);
-  rr(c, 0, 0, W, menu.H, 44); c.fillStyle = 'rgba(255,255,255,0.96)'; c.fill();
-  txt(c, 'Fizzik', 48, 64, 54, INK, 800, 'left');
-  txt(c, paused ? '⏸ пауза' : '▶ физика идёт', W - 48, 64, 36, paused ? ACC : '#7b818f', 700, 'right');
-  const btn = (id, label, x, y, w, h, on = false, size = 38) => {
+  rr(c, 0, 0, W, menu.H, 44); c.fillStyle = 'rgba(255,255,255,0.97)'; c.fill();
+  const btn = (id, label, x, y, w, h, on = false, size = 34) => {
     menuBtns.push({ id, x, y, w, h });
-    rr(c, x, y, w, h, 22); c.fillStyle = on ? ACC : (menuHover === id ? '#e4e7ee' : '#f1f2f5'); c.fill();
+    rr(c, x, y, w, h, 18); c.fillStyle = on ? ACC : (menuHover === id ? '#e1e4eb' : '#f1f2f5'); c.fill();
     if (menuHover === id) { c.lineWidth = 5; c.strokeStyle = INK; c.stroke(); }
     txt(c, label, x + w / 2, y + h / 2 + 2, size, on ? '#fff' : INK, 650);
   };
-  const sec = (t, y) => txt(c, t, 48, y, 30, '#7b818f', 700, 'left');
-  let y = 120;
-  btn('pause', paused ? '▶ Продолжить' : '⏸ Пауза', 40, y, 430, 110, paused, 42);
-  btn('undo', '↶ Назад', 486, y, 240, 110); btn('redo', '↷ Вперёд', 742, y, 242, 110);
-  y += 150; sec('КУРОК ДЕЛАЕТ', y); y += 30;
-  [['line', '✎ Линия'], ['point', '• Точка'], ['anchor', '⚓ Якорь'], ['erase', '✕ Стереть']].forEach(([id, l], k) => btn('t:' + id, l, 40 + k * 238, y, 222, 100, xrTool === id, 36));
-  y += 140; sec('СЕТКА', y); y += 30;
-  btn('snap', snapOn ? '# Сетка: вкл' : '# Сетка: выкл', 40, y, 340, 100, snapOn, 36);
-  [['0.1', '10 см'], ['0.25', '25 см'], ['0.5', '50 см']].forEach(([v, l], k) => btn('step:' + v, l, 396 + k * 198, y, 184, 100, snapOn && +v === snapStep, 34));
-  y += 140; sec('НОВЫЕ ФИГУРЫ', y); y += 30;
-  btn('grav', autoLoad ? '↓ Гравитация: да' : '↓ Гравитация: нет', 40, y, 460, 100, autoLoad, 34);
-  btn('ang', autoAngle ? '∠ Жёсткие углы: да' : '∠ Жёсткие углы: нет', 516, y, 468, 100, autoAngle, 34);
-  y += 140;
-  btn('hints', xrHints ? '? Подписи: вкл' : '? Подписи: выкл', 40, y, 300, 100, xrHints, 34);
-  btn('clear', '🗑 Очистить', 356, y, 300, 100, false, 34);
-  btn('exit', '⏏ Выйти', 672, y, 312, 100, false, 36);
+  const sec = (t, y) => { c.fillStyle = '#e6e8ee'; c.fillRect(36, y - 26, W - 72, 3); txt(c, t, 40, y + 4, 26, '#7b818f', 700, 'left'); };
+  const row = (y, items, h = 84, size = 32) => { const n = items.length, gap = 12, w = (W - 80 - gap * (n - 1)) / n; items.forEach((it, k) => it && btn(it[0], it[1], 40 + k * (w + gap), y, w, h, !!it[2], it[3] || size)); };
+  const val = (y, id, label, v) => { txt(c, label, 40, y + 42, 30, '#7b818f', 600, 'left'); btn(id + ':-', '−', 300, y, 150, 84, false, 44); txt(c, v, 600, y + 44, 38, INK, 700); btn(id + ':+', '+', 750, y, 234, 84, false, 44); };
+  // шапка: название, «?» — подписи у контроллеров, выйти
+  txt(c, 'Fizzik', 40, 60, 50, INK, 800, 'left');
+  btn('hints', '?', 600, 22, 90, 76, xrHints, 40);
+  btn('exit', '⏏ Выйти', 706, 22, 278, 76, false, 32);
+  let y = 118;
+  row(y, [['pause', paused ? '▶ Продолжить' : '⏸ Пауза', paused], ['step', '⏭ Шаг'], ['undo', '↶'], ['redo', '↷']], 96, 34);
+  y += 120;
+  for (let r = 0; r < 3; r++) { row(y, XR_TOOLS.slice(r * 3, r * 3 + 3).map(([id, l]) => ['t:' + id, l, xrTool === id || (id === 'unsel' && false)]), 84, 32); y += 96; }
+  y += 30; sec('РИСОВАНИЕ', y); y += 30;
+  row(y, [['grav', 'Гравитация', autoLoad], ['ang', 'Жёсткие углы', autoAngle]]); y += 96;
+  row(y, [['snap', 'Сетка', snapOn], ['step:0.1', '0.1 м', snapOn && snapStep === 0.1], ['step:0.25', '0.25 м', snapOn && snapStep === 0.25], ['step:0.5', '0.5 м', snapOn && snapStep === 0.5], ['step:1', '1 м', snapOn && snapStep === 1]], 84, 28); y += 96;
+  y += 30; sec('НАГРУЗКА', y); y += 30;
+  const ld = loadDir();
+  row(y, [['d:0,-1,0', '↓', ld === '0,-1,0'], ['d:0,1,0', '↑', ld === '0,1,0'], ['d:-1,0,0', '−X', ld === '-1,0,0'], ['d:1,0,0', '+X', ld === '1,0,0'], ['d:0,0,1', '−Y', ld === '0,0,1'], ['d:0,0,-1', '+Y', ld === '0,0,-1'], ['loadOff', '✕']], 84, 30); y += 96;
+  val(y, 'load', 'Сила', (+loadEl.value).toFixed(2)); y += 96;
+  y += 30; sec('СВЯЗИ  ·  для выбранных точек, если выбора нет — для всех', y); y += 30;
+  row(y, [['anchorOn', 'Якорь: закрепить'], ['anchorOff', 'Отпустить']]); y += 96;
+  row(y, [['angleOn', 'Угол: зафиксировать'], ['angleOff', 'Снять']]); y += 96;
+  val(y, 'spring', 'Длина', (+springEl.value).toFixed(2)); y += 96;
+  val(y, 'angleSoft', 'Пружин.', (+angleSoftEl.value).toFixed(2)); y += 96;
+  y += 30; sec('СЦЕНА  ·  ФАЙЛ', y); y += 30;
+  row(y, [['ceil', 'Потолок', S.ceiling], ['addBox', '+ Предмет'], ['clear', 'Очистить']]); y += 96;
+  txt(c, sel.points.size ? `выбрано точек: ${sel.points.size}` : 'ничего не выбрано — силы для всех', W / 2, y + 30, 28, '#7b818f', 600);
   menu.tex.needsUpdate = true;
 }
+const slider = (el, d) => { el.value = Math.max(+el.min, Math.min(+el.max, +el.value + d)).toFixed(2); el.dispatchEvent(new Event('input')); el.dispatchEvent(new Event('change')); };
+const clickEl = id => document.getElementById(id).click();
 function menuClick() {
   const id = menuHover; if (!id) return;
   if (id === 'pause') setPaused(!paused);
+  else if (id === 'step') { if (paused) step(); }
   else if (id === 'undo') undo();
   else if (id === 'redo') redo();
-  else if (id.startsWith('t:')) xrTool = id.slice(2);
-  else if (id === 'snap') { snapEl.checked = !snapEl.checked; applySnap(); }
-  else if (id.startsWith('step:')) { snapStepEl.value = id.slice(5); snapEl.checked = true; applySnap(); }
+  else if (id === 't:unsel') { sel.points.clear(); syncSpring(); syncLoad(); syncAngleSoft(); }
+  else if (id.startsWith('t:')) { xrTool = id.slice(2); for (const h of hands) h.cFrom = -1; }
   else if (id === 'grav') { document.getElementById('autoLoad').checked = !autoLoad; applySnap(); }
   else if (id === 'ang') { document.getElementById('autoAngle').checked = !autoAngle; applySnap(); }
+  else if (id === 'snap') { snapEl.checked = !snapEl.checked; applySnap(); }
+  else if (id.startsWith('step:')) { snapStepEl.value = id.slice(5); snapEl.checked = true; applySnap(); }
+  else if (id.startsWith('d:')) document.querySelector(`#dirs button[data-d="${id.slice(2)}"]`).click();
+  else if (/^(load|spring|angleSoft):[+-]$/.test(id)) { const [k, sg] = id.split(':'); slider({ load: loadEl, spring: springEl, angleSoft: angleSoftEl }[k], sg === '+' ? 0.1 : -0.1); }
+  else if (id === 'ceil') clickEl('ceil');
+  else if (['loadOff', 'anchorOn', 'anchorOff', 'angleOn', 'angleOff', 'addBox', 'clear'].includes(id)) clickEl(id);
   else if (id === 'hints') xrHints = !xrHints;
-  else if (id === 'clear') document.getElementById('clear').click();
   else if (id === 'exit') { const se = renderer.xr.getSession(); if (se) se.end(); return; }
+  tc.detach();   // в шлеме гизмо экрана не нужно
   drawMenu(); drawCards();
 }
 const menuHolder = new THREE.Group();
 menuHolder.add(menu.mesh);
-menuHolder.rotation.set(-1.0, 0, 0);
-menuHolder.position.set(0, 0.11, -0.06);   // над левым контроллером, наклонено к лицу
+menuHolder.rotation.set(-0.85, 0, 0);
+menuHolder.position.set(0, 0.2, -0.13);   // над левым контроллером, наклонено к лицу
 const rayLine = new THREE.Line(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3(0, 0, -1)]),
   new THREE.LineBasicMaterial({ color: 0xff5a2b, depthTest: false, transparent: true }));
 rayLine.renderOrder = 21; rayLine.frustumCulled = false; rayLine.visible = false; scene.add(rayLine);
@@ -1260,7 +1345,7 @@ function menuRay(h) {
   if (!menuHolder.parent || !menuHolder.parent.visible) return false;
   const o = new THREE.Vector3().setFromMatrixPosition(h.c.matrixWorld);
   const d = new THREE.Vector3(0, 0, -1).transformDirection(h.c.matrixWorld);
-  _rc.set(o, d); _rc.far = 0.8;
+  _rc.set(o, d); _rc.far = 1.2;
   const hit = _rc.intersectObject(menu.mesh, false)[0];
   if (!hit) return false;
   const x = hit.uv.x * menu.W, y = (1 - hit.uv.y) * menu.H;
@@ -1272,7 +1357,7 @@ function menuRay(h) {
 
 /* подписи у контроллеров: схема контроллера и что делает каждая кнопка */
 const cards = { left: makePanel(640, 520, 0.13), right: makePanel(640, 520, 0.13) };
-const TOOL_NAME = { line: 'рисовать линию', point: 'поставить точку', anchor: 'якорь', erase: 'стереть точку' };
+const TOOL_NAME = { draw: 'рисовать линию', point: 'поставить точку', connect: 'соединить две точки', select: 'выбрать кистью', pull: 'тянуть точку', anchor: 'якорь вкл/выкл', angle: 'угол вкл/выкл', erase: 'стереть точку или линию' };
 function drawCards() {
   for (const side of ['left', 'right']) {
     const p = cards[side], c = p.ctx, W = p.W, H = p.H, L = side === 'left';
@@ -1293,12 +1378,12 @@ function drawCards() {
     txt(c, 'КУРОК', 40, 380, 30, '#ff9c80', 800, 'left'); txt(c, '— ' + TOOL_NAME[xrTool], 160, 380, 30, '#fff', 600, 'left');
     txt(c, 'ГРИП', 40, 430, 30, '#ff9c80', 800, 'left'); txt(c, '— схватить и тянуть', 160, 430, 30, '#fff', 600, 'left');
     if (!L) txt(c, 'наведите на меню и нажмите курок', W / 2, 485, 26, '#9aa0ab', 600);
-    else txt(c, 'меню — над этой рукой', W / 2, 485, 26, '#9aa0ab', 600);
+    else txt(c, 'меню — над этой рукой; «?» в меню прячет подписи', W / 2, 485, 24, '#9aa0ab', 600);
     p.tex.needsUpdate = true;
   }
 }
-cards.left.mesh.position.set(-0.05, 0.04, 0.05); cards.left.mesh.rotation.set(-0.9, 0.35, 0);
-cards.right.mesh.position.set(0.05, 0.04, 0.05); cards.right.mesh.rotation.set(-0.9, -0.35, 0);
+cards.left.mesh.position.set(-0.13, -0.01, 0.04); cards.left.mesh.rotation.set(-1.0, 0.5, 0);   // сбоку, ниже меню
+cards.right.mesh.position.set(0.13, -0.01, 0.04); cards.right.mesh.rotation.set(-1.0, -0.5, 0);
 let cardsPaused = null, cardsTool = null;
 function syncXrUi() {   // привязать меню и подписи к рукам, обновить при смене
   for (const h of hands) {
@@ -1308,7 +1393,8 @@ function syncXrUi() {   // привязать меню и подписи к ру
     if (side === 'left' && menuHolder.parent !== h.c) h.c.add(menuHolder);
   }
   cards.left.mesh.visible = cards.right.mesh.visible = xrHints;
-  if (cardsPaused !== paused || cardsTool !== xrTool) { cardsPaused = paused; cardsTool = xrTool; drawCards(); drawMenu(); }
+  const sig = [paused, xrTool, sel.points.size, S.ceiling, loadDir(), snapOn, snapStep, autoLoad, autoAngle, xrHints].join('|');
+  if (cardsPaused !== sig) { cardsPaused = sig; drawCards(); drawMenu(); }
 }
 
 // где встанет точка: у кончика правого (или любого) контроллера
@@ -1693,7 +1779,7 @@ pushHist();
 renderer.setAnimationLoop(tick);   // один цикл и для экрана, и для шлема
 
 // для автопроверок
-window.__fizzik = { get rigid() { return rigid; }, get VS() { return VS; }, get xrTool() { return xrTool; }, menuHolder, cards,
+window.__fizzik = { get rigid() { return rigid; }, get VS() { return VS; }, menuIds: () => menuBtns.map(b => b.id), get xrTool() { return xrTool; }, menuHolder, cards,
   // для автотестов: куда поставить правый контроллер, чтобы луч попал в кнопку меню (в осях «тележки»)
   menuAim(id) {
     drawMenu(); const b = menuBtns.find(q => q.id === id); if (!b) return null;
