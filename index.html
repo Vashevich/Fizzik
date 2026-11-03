@@ -2,7 +2,7 @@
 <html lang="ru">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,viewport-fit=cover">
 <title>Fizzik</title>
 <style>
   :root{--bg:#f4f1ea;--panel:#fbfaf6;--ink:#1d1b17;--mute:#7a756a;--line:#d9d3c4;--acc:#c8421f}
@@ -34,7 +34,33 @@
   #legend{position:absolute;right:12px;top:12px;background:rgba(251,250,246,.92);border:1px solid var(--line);border-radius:6px;padding:6px 10px;font-size:12px;color:var(--mute);pointer-events:none;line-height:1.7}
   #legend i{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:6px;vertical-align:-1px}
   #legend i.sq{border-radius:1px}
+  #legBtn{position:absolute;right:12px;top:12px;display:none;width:34px;height:34px;padding:0;border-radius:50%;font-weight:700}
+  #mbar,#sheetHead{display:none}
   #hint{position:absolute;left:12px;bottom:10px;background:rgba(251,250,246,.92);border:1px solid var(--line);border-radius:6px;padding:5px 9px;font-size:12px;color:var(--mute);pointer-events:none;max-width:70%}
+  /* телефон: сцена на весь экран, панель — шторка снизу, внизу строка инструментов */
+  @media (max-width: 760px){
+    html,body{overflow:hidden;font-size:15px}
+    #app{display:block}
+    #stage{position:fixed;left:0;right:0;top:0;bottom:calc(58px + env(safe-area-inset-bottom))}
+    #mbar{display:flex;position:fixed;left:0;right:0;bottom:0;height:calc(58px + env(safe-area-inset-bottom));padding:7px 6px calc(7px + env(safe-area-inset-bottom));gap:6px;background:var(--panel);border-top:1px solid var(--line);z-index:30;align-items:center}
+    #mbar button{flex:none;height:44px;padding:0 12px;white-space:nowrap}
+    #mbar .ico{width:44px;padding:0;font-size:18px}
+    #mtools{display:flex;gap:6px;overflow-x:auto;flex:1;scrollbar-width:none;-webkit-overflow-scrolling:touch}
+    #mtools::-webkit-scrollbar{display:none}
+    #panel{position:fixed;left:0;right:0;bottom:calc(58px + env(safe-area-inset-bottom));width:auto;max-height:62vh;border-right:0;border-top:1px solid var(--line);border-radius:14px 14px 0 0;box-shadow:0 -6px 24px rgba(0,0,0,.12);z-index:20;transform:translateY(110%);transition:transform .22s ease;padding-top:0}
+    body.sheet #panel{transform:none}
+    #sheetHead{display:flex;position:sticky;top:0;background:var(--panel);padding:10px 0 8px;margin-bottom:6px;align-items:center;justify-content:space-between;z-index:1;border-bottom:1px solid var(--line)}
+    #sheetHead b{font-size:16px}
+    #panel h1,#panel .sub,#panel .pauseRow,#panel .pauseNote,#panel fieldset.tools{display:none}
+    #panel button{min-height:40px}
+    .chk input{width:22px;height:22px}
+    #legend{display:none;top:54px;font-size:13px}
+    body.legend #legend{display:block}
+    #legBtn{display:block}
+    #pauseBadge{top:12px;left:12px;transform:none;font-size:11px;padding:5px 9px;max-width:calc(100% - 70px)}
+    #hint{left:8px;right:8px;bottom:8px;max-width:none;font-size:12px;transition:opacity .4s}
+    #hint.gone{opacity:0}
+  }
 </style>
 <script type="importmap">
 {"imports":{"three":"./lib/three.module.js","three/addons/":"./lib/"}}
@@ -44,13 +70,14 @@
 <div id="app">
   <div id="panel">
     <h1>Fizzik</h1>
-    <div class="sub">Рисовалка с физикой в 3D · Rock Parametric</div>
+    <div class="sub">Рисовалка с физикой в 3D · «Rock-Parametric»</div>
 
-    <div class="row" style="margin-bottom:10px">
+    <div id="sheetHead"><b>Fizzik · настройки</b><button id="sheetClose">Закрыть ✕</button></div>
+    <div class="row pauseRow" style="margin-bottom:10px">
       <button id="pause" style="flex:3" title="Пробел">⏸ Пауза</button>
       <button id="stepBtn" disabled title="Один кадр расчёта (на паузе)">Шаг</button>
     </div>
-    <div class="note" style="margin:-4px 0 10px">Пауза (пробел) замораживает расчёт: рисуйте, назначайте силы, двигайте точки. Потом «Продолжить».</div>
+    <div class="note pauseNote" style="margin:-4px 0 10px">Пауза (пробел) замораживает расчёт: рисуйте, назначайте силы, двигайте точки. Потом «Продолжить».</div>
 
     <fieldset class="tools"><legend>Инструмент</legend>
       <div class="row" id="tools">
@@ -62,6 +89,7 @@
         <button data-tool="pull">Тянуть</button>
         <button data-tool="erase">Стереть</button>
         <button data-tool="angle">Угол</button>
+        <button data-tool="view">Камера</button>
       </div>
     </fieldset>
 
@@ -155,7 +183,7 @@
         <button id="vTop">Сверху</button>
         <button id="vReset">Сброс</button>
       </div>
-      <div class="note">Правая кнопка — вращать, колесо — приблизить, средняя — сдвинуть.</div>
+      <div class="note">Мышь: правая кнопка — вращать, колесо — приблизить, средняя — сдвинуть. Телефон: двумя пальцами — вращать и приблизить, инструмент «Камера» — вращать одним пальцем.</div>
     </fieldset>
 
     <fieldset><legend>Выгрузка</legend>
@@ -169,7 +197,23 @@
       <div class="note">JSON хранит всё, чтобы продолжить работу. OBJ и PNG — текущий вид (после провисания).</div>
     </fieldset>
   </div>
-  <div id="stage"><canvas id="c"></canvas><div id="frame"></div><div id="pauseBadge">ПАУЗА · расчёт стоит, можно рисовать и менять силы</div><div id="hint"></div>
+  <div id="mbar">
+    <button id="mPause" class="ico" title="Пауза">⏸</button>
+    <button id="mUndo" class="ico" title="Назад">↶</button>
+    <div id="mtools">
+      <button data-tool="draw" class="on">Рисовать</button>
+      <button data-tool="view">Камера</button>
+      <button data-tool="select">Выбрать</button>
+      <button data-tool="pull">Тянуть</button>
+      <button data-tool="point">Точка</button>
+      <button data-tool="connect">Соединить</button>
+      <button data-tool="anchor">Якорь</button>
+      <button data-tool="angle">Угол</button>
+      <button data-tool="erase">Стереть</button>
+    </div>
+    <button id="mMore" class="ico" title="Настройки и силы">☰</button>
+  </div>
+  <div id="stage"><canvas id="c"></canvas><div id="frame"></div><div id="pauseBadge">ПАУЗА · расчёт стоит, можно рисовать и менять силы</div><div id="hint"></div><button id="legBtn" title="Что значат цвета">?</button>
     <div id="legend">
       <div><i style="background:#2b6cb0"></i>точка с нагрузкой (падает)</div>
       <div><i style="background:#4a463d"></i>точка без сил (стоит)</div>
@@ -201,6 +245,8 @@ camera.position.copy(HOME.pos);
 const orbit = new OrbitControls(camera, cv);
 orbit.target.copy(HOME.target);
 orbit.mouseButtons = { LEFT: -1, MIDDLE: THREE.MOUSE.PAN, RIGHT: THREE.MOUSE.ROTATE };
+// палец: один — рисует (камера не трогается), два — вращать и приблизить
+orbit.touches = { ONE: -1, TWO: THREE.TOUCH.DOLLY_ROTATE };
 orbit.update();
 
 let W = 1, H = 1;
@@ -209,7 +255,10 @@ function resize() {
   W = Math.max(1, r.width); H = Math.max(1, r.height);
   renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
   renderer.setSize(W, H);
-  camera.aspect = W / H; camera.updateProjectionMatrix();
+  camera.aspect = W / H;
+  // узкий вертикальный экран: шире угол обзора, чтобы сцена помещалась по ширине
+  camera.fov = camera.aspect < 1 ? Math.min(80, 2 * Math.atan(Math.tan(25 * Math.PI / 180) / camera.aspect * 0.8) * 180 / Math.PI) : 50;
+  camera.updateProjectionMatrix();
 }
 new ResizeObserver(resize).observe(stage);
 resize();
@@ -455,6 +504,7 @@ function toScreen(x, y, z) {
   return { x: (_v.x + 1) / 2 * W, y: (1 - _v.y) / 2 * H, ok: _v.z > -1 && _v.z < 1 };
 }
 function hitPoint(mx, my, r) {
+  r *= fat;
   let best = -1, bd = r * r;
   S.points.forEach((p, i) => {
     const s = toScreen(p.x, p.y, p.z); if (!s.ok) return;
@@ -464,7 +514,7 @@ function hitPoint(mx, my, r) {
   return best;
 }
 function hitLink(mx, my) {
-  let best = -1, bd = 8;
+  let best = -1, bd = 8 * fat;
   S.links.forEach((l, i) => {
     const a = S.points[l.a], b = S.points[l.b];
     const sa = toScreen(a.x, a.y, a.z), sb = toScreen(b.x, b.y, b.z);
@@ -487,6 +537,7 @@ function hitBox(mx, my) {
 }
 function addPoint(x, y, z) {
   if (S.points.length >= CAP) return -1;
+  if (y < 0) y = 0;   // ниже пола не ставим — точка ложится на пол
   S.points.push({ x, y, z, px: x, py: y, pz: z, a: false, f: autoLoad ? { dx: 0, dy: -1, dz: 0, s: loadStrength || 1 } : null });
   return S.points.length - 1;
 }
@@ -694,8 +745,9 @@ function step() {
 }
 function rub(p) { p.px += (p.x - p.px) * 0.3; p.pz += (p.z - p.pz) * 0.3; }
 function collide(p) {
-  if (p.y < 0) { p.y = 0; rub(p); }
-  if (S.ceiling && p.y > CEIL) p.y = CEIL;
+  // пол и потолок выталкивают без «пинка»: прошлое положение тоже ставим на границу
+  if (p.y < 0) { p.y = 0; if (p.py < 0) p.py = 0; rub(p); }
+  if (S.ceiling && p.y > CEIL) { p.y = CEIL; if (p.py > CEIL) p.py = CEIL; }
   if (p.x > HALF) p.x = HALF; else if (p.x < -HALF) p.x = -HALF;
   if (p.z > HALF) p.z = HALF; else if (p.z < -HALF) p.z = -HALF;
   for (const b of S.boxes) {
@@ -714,15 +766,36 @@ function collide(p) {
 let mx = 0, my = 0;
 function pos(e) { const r = cv.getBoundingClientRect(); mx = e.clientX - r.left; my = e.clientY - r.top; }
 const _hit = new THREE.Vector3();
-function planePoint(pl) { setRay(mx, my); return ray.ray.intersectPlane(pl, _hit) ? _hit : null; }
+function planePoint(pl) {   // точка на плоскости под курсором; ниже пола — на полу
+  setRay(mx, my);
+  if (!ray.ray.intersectPlane(pl, _hit)) return null;
+  if (_hit.y < 0) _hit.y = 0;
+  return _hit;
+}
 
+let fat = 1;   // на пальце попадать по точкам и линиям проще
+const touches = new Set();
+function abortGesture() {   // второй палец: это жест камеры, а не рисование
+  if (drawing) {
+    S.points.length = drawing.n0; S.links.length = drawing.l0;
+    drawing = null;
+  }
+  pullIdx = -1; pullPlane = null; frame = null; showFrame();
+}
 cv.addEventListener('pointerdown', e => {
+  if (e.pointerType === 'touch') {
+    touches.add(e.pointerId);
+    if (touches.size > 1) { abortGesture(); return; }
+  }
+  fat = e.pointerType === 'touch' ? 2.2 : 1;
   if (e.button !== 0) return;
+  if (tool === 'view') return;   // «Камера»: тянет OrbitControls
   if (tc.dragging || tc.axis !== null) return;   // кликнули по гизмо
   pos(e);
   cv.setPointerCapture(e.pointerId);
 
   if (tool === 'draw') {
+    const n0 = S.points.length, l0 = S.links.length;
     const pl = drawPlane(plane);
     let i = hitPoint(mx, my, SNAP);
     if (i < 0) {
@@ -732,7 +805,7 @@ cv.addEventListener('pointerdown', e => {
       if (i < 0) i = addPoint(h.x, h.y, h.z);
     }
     if (i < 0) return;
-    drawing = { last: i, plane: pl, planeName: plane, moved: false, touched: new Set([i]) };
+    drawing = { last: i, plane: pl, planeName: plane, moved: false, touched: new Set([i]), n0, l0 };
   } else if (tool === 'point') {
     const h = planePoint(drawPlane(plane)); if (!h) return;
     snapV(h);
@@ -864,7 +937,8 @@ function endPointer(e) {
   }
 }
 cv.addEventListener('pointerup', endPointer);
-cv.addEventListener('pointercancel', () => { drawing = null; pullIdx = -1; frame = null; showFrame(); });
+cv.addEventListener('pointercancel', e => { touches.delete(e.pointerId); abortGesture(); });
+['pointerup', 'pointerleave'].forEach(n => cv.addEventListener(n, e => { if (e.type === 'pointerup' || e.pointerType === 'touch') touches.delete(e.pointerId); }));
 cv.addEventListener('dblclick', e => {
   if (tool !== 'select') return;
   pos(e);
@@ -884,15 +958,33 @@ const hints = {
   select: 'Нажмите на точку, линию или предмет — появится гизмо. Тяните по пустому месту — рамка. Двойной щелчок — вся линия целиком. Shift — добавить к выбранным.',
   angle: 'Нажмите на точку — зафиксировать углы между линиями, которые в ней сходятся (ещё раз — снять).',
   pull: 'Тяните точку левой кнопкой — она ведёт за собой всю линию.',
+  view: 'Камера: левая кнопка или один палец — вращать, колесо или два пальца — приблизить и сдвинуть.',
+  drawTouch: 'Ведите пальцем — линия. Двумя пальцами — вращать камеру и приблизить.',
+  selectTouch: 'Нажмите на точку — появится гизмо. Ведите по пустому месту — рамка. Двумя пальцами — камера.',
   erase: 'Нажмите на точку, линию или предмет — стереть.'
 };
+const isPhone = () => matchMedia('(max-width: 760px)').matches;
+let hintTimer = 0;
 function setTool(t) {
   tool = t; connectFrom = -1; rubber.visible = false;
-  document.querySelectorAll('#tools button').forEach(b => b.classList.toggle('on', b.dataset.tool === t));
-  cv.style.cursor = t === 'pull' ? 'grab' : 'crosshair';
-  hintEl.textContent = hints[t];
+  document.querySelectorAll('[data-tool]').forEach(b => b.classList.toggle('on', b.dataset.tool === t));
+  cv.style.cursor = t === 'pull' ? 'grab' : (t === 'view' ? 'move' : 'crosshair');
+  // «Камера»: один палец или левая кнопка вращают сцену
+  orbit.touches.ONE = t === 'view' ? THREE.TOUCH.ROTATE : -1;
+  orbit.touches.TWO = t === 'view' ? THREE.TOUCH.DOLLY_PAN : THREE.TOUCH.DOLLY_ROTATE;
+  orbit.mouseButtons.LEFT = t === 'view' ? THREE.MOUSE.ROTATE : -1;
+  hintEl.textContent = isPhone() && hints[t + 'Touch'] ? hints[t + 'Touch'] : hints[t];
+  hintEl.classList.remove('gone'); clearTimeout(hintTimer);
+  if (isPhone()) hintTimer = setTimeout(() => hintEl.classList.add('gone'), 4000);
 }
-document.querySelectorAll('#tools button').forEach(b => b.addEventListener('click', () => setTool(b.dataset.tool)));
+document.querySelectorAll('[data-tool]').forEach(b => b.addEventListener('click', () => setTool(b.dataset.tool)));
+// телефон: шторка с настройками, подсказка цветов, пауза и «назад» в нижней строке
+document.getElementById('mMore').addEventListener('click', () => document.body.classList.toggle('sheet'));
+document.getElementById('sheetClose').addEventListener('click', () => document.body.classList.remove('sheet'));
+document.getElementById('legBtn').addEventListener('click', () => document.body.classList.toggle('legend'));
+document.getElementById('mUndo').addEventListener('click', () => undo());
+document.getElementById('mPause').addEventListener('click', () => setPaused(!paused));
+cv.addEventListener('pointerdown', () => { document.body.classList.remove('sheet'); }, true);
 document.querySelectorAll('#planes button').forEach(b => b.addEventListener('click', () => {
   plane = b.dataset.plane;
   document.querySelectorAll('#planes button').forEach(x => x.classList.toggle('on', x === b));
@@ -998,6 +1090,7 @@ function setPaused(v) {
   document.body.classList.toggle('paused', v);
   pauseBtn.classList.toggle('on', v);
   pauseBtn.textContent = v ? '▶ Продолжить' : '⏸ Пауза';
+  const mp = document.getElementById('mPause'); mp.textContent = v ? '▶' : '⏸'; mp.classList.toggle('on', v);
   stepBtn.disabled = !v;
   // при выходе из паузы скорости обнуляем: точки не «выстреливают» от правок
   if (!v) for (const p of S.points) { p.px = p.x; p.py = p.y; p.pz = p.z; }
