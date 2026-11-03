@@ -121,7 +121,7 @@
     </section>
 
     <section>
-      <h2>Рисование <i class="tip" data-tip="Новые фигуры сразу получают гравитацию и жёсткие углы — можно выключить. Оси как в Rhino: Z вверх. Плоскость: «Вид» — перпендикулярно взгляду, как на экране, без сетки; XY — горизонтальная (как пол), XZ — фронтальная, YZ — боковая, с сеткой. Плоскость проходит через центр обзора и не меняется, пока тянете штрих. Привязка ставит точки и гизмо в узлы 3D-сетки.">i</i></h2>
+      <h2>Рисование <i class="tip" data-tip="Новые фигуры сразу получают гравитацию и жёсткие углы — можно выключить. Оси как в Rhino: Z вверх. Плоскость: «Вид» — перпендикулярно взгляду, как на экране, без сетки; XY — горизонтальная (как пол), XZ — фронтальная, YZ — боковая, с сеткой. Плоскость проходит через центр обзора и не меняется, пока тянете штрих. Сетка (привязка) ставит точки и гизмо в узлы 3D-сетки; у курсора видна объёмная сетка, оранжевая точка и отвес до пола — сразу видно, куда в пространстве встанет точка.">i</i></h2>
       <label class="chk"><input type="checkbox" id="autoLoad" checked> Гравитация</label>
       <label class="chk"><input type="checkbox" id="autoAngle" checked> Жёсткие углы</label>
       <div class="chk"><label><input type="checkbox" id="snap"> Сетка</label>
@@ -140,7 +140,7 @@
     </section>
 
     <section>
-      <h2>Нагрузка <i class="tip" data-tip="Вектор силы для выбранных точек (если ничего не выбрано — для всех). Направление — кнопкой (оси как в Rhino: ↓ = −Z), сила — ползунком от 0 до 2. «✕» снимает нагрузку. Точки с нагрузкой синие.">i</i></h2>
+      <h2>Нагрузка <i class="tip" data-tip="Вектор силы для выбранных точек (если ничего не выбрано — для всех). Направление — кнопкой (оси как в Rhino: ↓ = −Z), сила — ползунком от 0 до 2. «✕» снимает нагрузку. ">i</i></h2>
       <div class="seg" id="dirs">
         <button data-d="0,-1,0" title="Вниз, −Z (гравитация)">↓</button>
         <button data-d="0,1,0" title="Вверх, +Z">↑</button>
@@ -154,7 +154,7 @@
     </section>
 
     <section>
-      <h2>Связи <i class="tip" data-tip="Якорь закрепляет выбранные точки (рамка в «Выбрать»). Одна закреплённая точка у жёсткой фигуры работает как шарнир. Длина: 0 — как нарисовано, 1 — вдвое длиннее, −1 — вдвое короче (выбранные линии или все); изменённые линии зелёные. Угол: фиксирует углы в выбранных точках; пружинность 0 — жёсткое тело, больше — угол поддаётся. Точки с углом и без нагрузки фиолетовые.">i</i></h2>
+      <h2>Связи <i class="tip" data-tip="Якорь закрепляет выбранные точки (рамка в «Выбрать»). Одна закреплённая точка у жёсткой фигуры работает как шарнир. Длина: 0 — как нарисовано, 1 — вдвое длиннее, −1 — вдвое короче (выбранные линии или все); изменённые линии зелёные. Угол: фиксирует углы в выбранных точках; пружинность 0 — жёсткое тело, больше — угол поддаётся.">i</i></h2>
       <div class="row2"><span class="lbl">Якорь</span><button id="anchorOn" title="Закрепить выбранные">Закрепить</button><button id="anchorOff" title="Отпустить выбранные">Отпустить</button></div>
       <div class="row2"><span class="lbl">Угол</span><button id="angleOn" title="Зафиксировать углы в выбранных точках">Зафикс.</button><button id="angleOff" title="Снять фиксацию">Снять</button></div>
       <label class="sl"><span>Длина</span><input type="range" id="spring" min="-1" max="1" step="0.05" value="0"><b id="springVal">0.00</b></label>
@@ -192,13 +192,12 @@
   </div>
   <div id="stage"><canvas id="c"></canvas><div id="frame"></div><div id="pauseBadge">⏸ пауза</div><div id="hint"></div><button id="legBtn" title="Что значат цвета">?</button>
     <div id="legend">
-      <div><i style="background:#2b6cb0"></i>точка с нагрузкой (падает)</div>
-      <div><i style="background:#4a463d"></i>точка без сил (стоит)</div>
-      <div><i style="background:#7b3fa0"></i>угол зафиксирован, нагрузки нет</div>
+      <div><i style="background:#111214"></i>точка</div>
       <div><i class="sq" style="background:#c8421f"></i>якорь</div>
-      <div><i style="background:#2f9e44"></i>пружина (линия изменена)</div>
-      <div class="small">якорь или пружина вместе с другой силой — маленькие метки рядом</div>
+      <div><i style="background:#2f9e44"></i>пружина (длина линии изменена)</div>
       <div><i style="background:#ff5a2b"></i>выбрано</div>
+      <div class="small">метки у узла с якорем или пружиной:<br><i style="background:#2b6cb0"></i>нагрузка <i style="background:#7b3fa0;margin-left:6px"></i>угол</div>
+      <div class="small">с привязкой у курсора — 3D-сетка, оранжевая точка и отвес до пола показывают, куда встанет точка</div>
     </div></div>
 </div>
 
@@ -275,6 +274,34 @@ const rubber = new THREE.Line(
   new THREE.LineBasicMaterial({ color: 0xff5a2b }));
 rubber.frustumCulled = false; rubber.visible = false; scene.add(rubber);
 
+// 3D-сетка у курсора (как в Gravity Sketch): узлы видны только рядом с тем местом, куда встанет точка
+const LAT = 2;   // ±2 шага по каждой оси
+const lattice = new THREE.Group(); lattice.visible = false; scene.add(lattice);
+{
+  const pos = [], col = [], c = new THREE.Color(), acc = new THREE.Color(0xff5a2b), bgc = new THREE.Color(0xf6f7fa);
+  for (let i = -LAT; i <= LAT; i++) for (let j = -LAT; j <= LAT; j++) for (let k = -LAT; k <= LAT; k++) {
+    if (!i && !j && !k) continue;
+    pos.push(i, j, k);
+    const d = Math.hypot(i, j, k) / Math.hypot(LAT, LAT, LAT);
+    c.copy(acc).lerp(bgc, Math.min(1, 0.15 + d * 0.95)); col.push(c.r, c.g, c.b);
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
+  lattice.add(new THREE.Points(g, new THREE.PointsMaterial({ size: 5, sizeAttenuation: false, vertexColors: true, depthWrite: false })));
+  // крест осей через узел: X красный, Y (вглубь) зелёный, Z (вверх) синий — как в Rhino
+  const ax = (a, b, color) => { const l = new THREE.Line(new THREE.BufferGeometry().setFromPoints([a, b]), new THREE.LineBasicMaterial({ color, transparent: true, opacity: 0.55, depthWrite: false })); lattice.add(l); };
+  ax(new THREE.Vector3(-LAT, 0, 0), new THREE.Vector3(LAT, 0, 0), 0xff3b30);
+  ax(new THREE.Vector3(0, -LAT, 0), new THREE.Vector3(0, LAT, 0), 0x2f6bff);
+  ax(new THREE.Vector3(0, 0, -LAT), new THREE.Vector3(0, 0, LAT), 0x22b14c);
+}
+const cursorDot = new THREE.Mesh(new THREE.SphereGeometry(1, 16, 10), new THREE.MeshBasicMaterial({ color: 0xff5a2b, transparent: true, opacity: 0.85, depthWrite: false }));
+cursorDot.visible = false; scene.add(cursorDot);
+const dropLine = new THREE.Line(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3()]),
+  new THREE.LineBasicMaterial({ color: 0x8a93a3, transparent: true, opacity: 0.6 }));
+dropLine.frustumCulled = false; dropLine.visible = false; scene.add(dropLine);
+let hoverOn = false;
+
 // стрелка нагрузки
 const arrow = new THREE.ArrowHelper(new THREE.Vector3(0, -1, 0), new THREE.Vector3(0, 0, 0), 0.7, 0x2b6cb0, 0.18, 0.1);
 arrow.visible = false;
@@ -313,7 +340,7 @@ for (const m of [pointMesh, anchorMesh, linkMesh, markMesh]) {
   m.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
   m.frustumCulled = false; m.count = 0; scene.add(m);
 }
-const C = { point: new THREE.Color(0x4a463d), loaded: new THREE.Color(0x2b6cb0), angle: new THREE.Color(0x7b3fa0), anchor: new THREE.Color(0xc8421f), link: new THREE.Color(0x1d1b17),
+const C = { point: new THREE.Color(0x111214), loaded: new THREE.Color(0x2b6cb0), angle: new THREE.Color(0x7b3fa0), anchor: new THREE.Color(0xc8421f), link: new THREE.Color(0x1d1b17),
   spring: new THREE.Color(0x2f9e44), sel: new THREE.Color(0xff5a2b) };
 const _m = new THREE.Matrix4(), _q = new THREE.Quaternion(), _p = new THREE.Vector3(),
   _s = new THREE.Vector3(), _d = new THREE.Vector3(), _up = new THREE.Vector3(0, 1, 0);
@@ -328,7 +355,7 @@ function updateVisuals() {
       anchorMesh.setMatrixAt(na, _m); anchorMesh.setColorAt(na, sl ? C.sel : C.anchor); na++;
     } else {
       _m.compose(_p.set(p.x, p.y, p.z), _q.identity(), _s.set(0.035, 0.035, 0.035));
-      pointMesh.setMatrixAt(np, _m); pointMesh.setColorAt(np, sl ? C.sel : (p.f ? C.loaded : (angV.has(i) ? C.angle : C.point))); np++;
+      pointMesh.setMatrixAt(np, _m); pointMesh.setColorAt(np, sl ? C.sel : C.point); np++;
     }
   });
   pointMesh.count = np; anchorMesh.count = na;
@@ -863,7 +890,7 @@ function showFrame() {
   frameEl.style.width = Math.abs(frame.x1 - frame.x0) + 'px'; frameEl.style.height = Math.abs(frame.y1 - frame.y0) + 'px';
 }
 cv.addEventListener('pointermove', e => {
-  pos(e);
+  pos(e); hoverOn = true;
   if (frame) { frame.x1 = mx; frame.y1 = my; showFrame(); return; }
   if (connectFrom >= 0) updateRubber();
   if (drawing) {
@@ -929,6 +956,30 @@ cv.addEventListener('dblclick', e => {
   sel.box = -1; sel.points = component(i);
   updateGizmo();
 });
+
+// где встанет точка: узел 3D-сетки (или существующая точка) под курсором
+const _cur = new THREE.Vector3();
+function updateCursor(onPlane) {
+  let show = onPlane && hoverOn && !frame && !tcDragging;
+  if (show) {
+    const j = hitPoint(mx, my, SNAP);
+    if (j >= 0 && !drawing) { const q = S.points[j]; _cur.set(q.x, q.y, q.z); }
+    else {
+      const h = planePoint(drawing ? drawing.plane : drawPlane(plane));
+      if (!h) show = false; else _cur.copy(snapV(h));
+    }
+  }
+  lattice.visible = show && snapOn;
+  cursorDot.visible = dropLine.visible = show;
+  if (!show) return;
+  lattice.position.copy(_cur); lattice.scale.setScalar(snapStep);
+  cursorDot.position.copy(_cur); cursorDot.scale.setScalar(0.045);
+  const a = dropLine.geometry.attributes.position;   // отвес до пола: видно высоту точки
+  a.setXYZ(0, _cur.x, _cur.y, _cur.z); a.setXYZ(1, _cur.x, 0, _cur.z); a.needsUpdate = true;
+  dropLine.visible = _cur.y > 1e-3;
+}
+cv.addEventListener('pointerenter', () => { hoverOn = true; });
+cv.addEventListener('pointerleave', () => { hoverOn = false; });
 
 /* ---------- интерфейс ---------- */
 const hints = {
@@ -1187,7 +1238,8 @@ function tick() {
   const onPlane = tool === 'draw' || tool === 'point' || tool === 'connect';
   guide.visible = false;   // заливку плоскости не показываем — только сетку
   const pn = drawing ? drawing.planeName : plane;
-  gridHelper.visible = onPlane && pn !== 'VIEW';   // «Вид» — просто вид, без сетки
+  gridHelper.visible = onPlane && pn !== 'VIEW' && !snapOn;   // «Вид» — просто вид; с привязкой — 3D-сетка у курсора
+  updateCursor(onPlane);
   if (onPlane) {
     const n = planeNormal(drawing ? drawing.planeName : plane);
     planeCenter(guide.position);
