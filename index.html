@@ -5,61 +5,85 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,viewport-fit=cover">
 <title>Fizzik</title>
 <style>
-  :root{--bg:#f4f1ea;--panel:#fbfaf6;--ink:#1d1b17;--mute:#7a756a;--line:#d9d3c4;--acc:#c8421f}
+  :root{--bg:#f6f7fa;--panel:#ffffff;--ink:#16181d;--mute:#7b818f;--line:#e6e8ee;--soft:#f3f4f7;--acc:#ff5a2b;--accSoft:#fff0eb;--blue:#2f6bff}
   *{box-sizing:border-box}
-  html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);font:14px/1.35 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+  html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);font:13px/1.35 Inter,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;-webkit-font-smoothing:antialiased}
   #app{display:flex;height:100%}
-  #panel{width:256px;flex:none;background:var(--panel);border-right:1px solid var(--line);padding:12px;overflow:auto}
-  #panel h1{font-size:17px;margin:0 0 2px}
-  #panel .sub{color:var(--mute);font-size:12px;margin-bottom:10px}
-  fieldset{border:1px solid var(--line);border-radius:8px;margin:0 0 10px;padding:8px 10px 10px}
-  legend{padding:0 6px;font-weight:600;font-size:12px;letter-spacing:.04em;text-transform:uppercase;color:var(--mute)}
-  button{font:inherit;color:inherit;background:#fff;border:1px solid var(--line);border-radius:6px;padding:6px 9px;cursor:pointer}
-  button:hover{border-color:#b9b2a0}
-  button.on{background:var(--ink);color:#fff;border-color:var(--ink)}
-  button:disabled{opacity:.4;cursor:default}
-  .row{display:flex;gap:6px;flex-wrap:wrap}
-  .row>button{flex:1 1 auto}
-  .tools button{flex:1 1 44%}
-  label.sl{display:block;margin-top:8px;font-size:12px;color:var(--mute)}
-  label.sl b{color:var(--ink);float:right;font-variant-numeric:tabular-nums}
-  input[type=range]{width:100%;margin:4px 0 0}
-  .note{font-size:12px;color:var(--mute);margin:6px 0 0}
-  .chk{display:flex;gap:8px;align-items:center;margin:2px 0}
-  #stage{flex:1;position:relative;overflow:hidden;min-width:0}
+  #panel{width:232px;flex:none;background:var(--panel);border-right:1px solid var(--line);padding:12px 12px 16px;overflow:auto;scrollbar-width:thin}
+  .head{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px}
+  #panel h1{font-size:18px;margin:0;letter-spacing:-.02em;font-weight:750}
+  #panel .sub{color:var(--mute);font-size:11px}
+  section{border-top:1px solid var(--line);padding:10px 0 2px}
+  h2{display:flex;align-items:center;gap:6px;margin:0 0 7px;font-size:11px;font-weight:650;letter-spacing:.06em;text-transform:uppercase;color:var(--mute)}
+  button{font:inherit;color:inherit;background:var(--soft);border:1px solid transparent;border-radius:8px;padding:6px 8px;cursor:pointer;transition:background .12s,color .12s}
+  button:hover{background:#e9ebf0}
+  button.on{background:var(--ink);color:#fff}
+  #tools button.on,#mtools button.on{background:var(--acc);color:#fff}
+  #pause.on{background:var(--acc);color:#fff}
+  button:disabled{opacity:.35;cursor:default}
+  button.ico{width:32px;padding:6px 0;flex:none}
+  .row,.pauseRow{display:flex;gap:5px;margin-bottom:10px}
+  .pauseRow .wide{flex:1;font-weight:600}
+  .grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:5px;margin-bottom:8px}
+  .grid3 button{padding:7px 2px;font-size:12.5px}
+  .seg{display:flex;background:var(--soft);border-radius:9px;padding:2px;gap:2px;margin:0 0 7px}
+  .seg button{flex:1;background:transparent;padding:5px 2px;border-radius:7px;font-size:12px}
+  .seg button:hover{background:#fff}
+  .seg button.on{background:#fff;color:var(--ink);box-shadow:0 1px 3px rgba(20,24,40,.14);font-weight:600}
+  .row2{display:flex;gap:5px;align-items:center;margin:0 0 6px}
+  .row2 .lbl{width:44px;color:var(--mute);font-size:12px}
+  .row2 button{flex:1;padding:5px 2px;font-size:12px}
+  .row2 .chk{flex:1;margin:0}
+  label.sl{display:flex;align-items:center;gap:7px;margin:2px 0 6px;font-size:12px;color:var(--mute)}
+  label.sl span{width:44px;flex:none}
+  label.sl b{width:30px;text-align:right;color:var(--ink);font-weight:600;font-variant-numeric:tabular-nums;font-size:11.5px}
+  input[type=range]{flex:1;min-width:0;accent-color:var(--acc);margin:0;height:18px}
+  input[type=checkbox]{accent-color:var(--acc);width:15px;height:15px;margin:0}
+  .chk{display:flex;gap:7px;align-items:center;margin:0 0 6px;font-size:12.5px;cursor:pointer}
+  .chk label{display:flex;gap:7px;align-items:center;flex:1;cursor:pointer}
+  select{font:inherit;font-size:12px;border:1px solid var(--line);border-radius:7px;padding:2px 4px;background:#fff;color:var(--ink)}
+  i.tip{font-style:normal;display:inline-flex;align-items:center;justify-content:center;width:15px;height:15px;border-radius:50%;border:1px solid #cfd3dc;color:var(--mute);font-size:10px;font-weight:700;text-transform:none;letter-spacing:0;cursor:help;flex:none;font-family:Georgia,serif}
+  i.tip:hover,i.tip.open{background:var(--ink);border-color:var(--ink);color:#fff}
+  #tipBox{position:fixed;z-index:50;max-width:250px;background:var(--ink);color:#fff;font-size:12px;line-height:1.45;padding:8px 10px;border-radius:9px;box-shadow:0 8px 24px rgba(10,12,20,.25);pointer-events:none;opacity:0;transform:translateY(-3px);transition:opacity .12s,transform .12s}
+  #tipBox.show{opacity:1;transform:none}
+  #stage{flex:1;position:relative;overflow:hidden;min-width:0;background:var(--bg)}
   canvas{position:absolute;inset:0;display:block;touch-action:none}
-  #frame{position:absolute;border:1px dashed var(--acc);background:rgba(200,66,31,.08);pointer-events:none;display:none}
-  #pauseBadge{position:absolute;left:50%;top:12px;transform:translateX(-50%);background:var(--ink);color:#fff;border-radius:6px;padding:6px 12px;font-size:12px;font-weight:600;letter-spacing:.03em;pointer-events:none;display:none}
+  #frame{position:absolute;border:1px dashed var(--acc);background:rgba(255,90,43,.08);pointer-events:none;display:none}
+  #pauseBadge{position:absolute;left:50%;top:10px;transform:translateX(-50%);background:var(--acc);color:#fff;border-radius:20px;padding:4px 11px;font-size:11.5px;font-weight:650;pointer-events:none;display:none}
   body.paused #pauseBadge{display:block}
-  #legend{position:absolute;right:12px;top:12px;background:rgba(251,250,246,.92);border:1px solid var(--line);border-radius:6px;padding:6px 10px;font-size:12px;color:var(--mute);pointer-events:none;line-height:1.7}
-  #legend i{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:6px;vertical-align:-1px}
-  #legend i.sq{border-radius:1px}
-  #legBtn{position:absolute;right:12px;top:12px;display:none;width:34px;height:34px;padding:0;border-radius:50%;font-weight:700}
+  body.paused #stage{box-shadow:inset 0 0 0 2px var(--acc)}
+  #legBtn{position:absolute;right:10px;top:10px;width:28px;height:28px;padding:0;border-radius:50%;background:#fff;box-shadow:0 1px 4px rgba(20,24,40,.15);font-weight:700;color:var(--mute)}
+  body.legend #legBtn{background:var(--ink);color:#fff}
+  #legend{position:absolute;right:10px;top:44px;background:#fff;border-radius:10px;box-shadow:0 8px 24px rgba(10,12,20,.15);padding:8px 11px;font-size:12px;color:var(--ink);pointer-events:none;line-height:1.75;display:none}
+  body.legend #legend{display:block}
+  #legend i{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:7px;vertical-align:0}
+  #legend i.sq{border-radius:2px}
+  #legend .small{font-size:11px;color:var(--mute);line-height:1.3;margin:2px 0}
+  #hint{display:none}
   #mbar,#sheetHead{display:none}
-  #hint{position:absolute;left:12px;bottom:10px;background:rgba(251,250,246,.92);border:1px solid var(--line);border-radius:6px;padding:5px 9px;font-size:12px;color:var(--mute);pointer-events:none;max-width:70%}
   /* телефон: сцена на весь экран, панель — шторка снизу, внизу строка инструментов */
   @media (max-width: 760px){
-    html,body{overflow:hidden;font-size:15px}
+    html,body{overflow:hidden;font-size:14px}
     #app{display:block}
     #stage{position:fixed;left:0;right:0;top:0;bottom:calc(58px + env(safe-area-inset-bottom))}
     #mbar{display:flex;position:fixed;left:0;right:0;bottom:0;height:calc(58px + env(safe-area-inset-bottom));padding:7px 6px calc(7px + env(safe-area-inset-bottom));gap:6px;background:var(--panel);border-top:1px solid var(--line);z-index:30;align-items:center}
-    #mbar button{flex:none;height:44px;padding:0 12px;white-space:nowrap}
+    #mbar button{flex:none;height:44px;padding:0 13px;white-space:nowrap;border-radius:10px}
     #mbar .ico{width:44px;padding:0;font-size:18px}
+    #mPause.on{background:var(--acc);color:#fff}
     #mtools{display:flex;gap:6px;overflow-x:auto;flex:1;scrollbar-width:none;-webkit-overflow-scrolling:touch}
     #mtools::-webkit-scrollbar{display:none}
-    #panel{position:fixed;left:0;right:0;bottom:calc(58px + env(safe-area-inset-bottom));width:auto;max-height:62vh;border-right:0;border-top:1px solid var(--line);border-radius:14px 14px 0 0;box-shadow:0 -6px 24px rgba(0,0,0,.12);z-index:20;transform:translateY(110%);transition:transform .22s ease;padding-top:0}
+    #panel{position:fixed;left:0;right:0;bottom:calc(58px + env(safe-area-inset-bottom));width:auto;max-height:64vh;border-right:0;border-radius:16px 16px 0 0;box-shadow:0 -8px 30px rgba(10,12,20,.15);z-index:20;transform:translateY(110%);transition:transform .22s ease;padding-top:0}
     body.sheet #panel{transform:none}
-    #sheetHead{display:flex;position:sticky;top:0;background:var(--panel);padding:10px 0 8px;margin-bottom:6px;align-items:center;justify-content:space-between;z-index:1;border-bottom:1px solid var(--line)}
-    #sheetHead b{font-size:16px}
-    #panel h1,#panel .sub,#panel .pauseRow,#panel .pauseNote,#panel fieldset.tools{display:none}
-    #panel button{min-height:40px}
-    .chk input{width:22px;height:22px}
-    #legend{display:none;top:54px;font-size:13px}
-    body.legend #legend{display:block}
-    #legBtn{display:block}
-    #pauseBadge{top:12px;left:12px;transform:none;font-size:11px;padding:5px 9px;max-width:calc(100% - 70px)}
-    #hint{left:8px;right:8px;bottom:8px;max-width:none;font-size:12px;transition:opacity .4s}
-    #hint.gone{opacity:0}
+    #sheetHead{display:flex;position:sticky;top:0;background:var(--panel);padding:10px 0 8px;align-items:center;justify-content:space-between;z-index:1}
+    #sheetHead b{font-size:15px}
+    #panel .head,#panel .pauseRow,#panel section.tools{display:none}
+    #panel button{min-height:38px}
+    .seg button{min-height:34px}
+    label.sl input{height:28px}
+    input[type=checkbox]{width:20px;height:20px}
+    #legBtn{width:34px;height:34px}
+    #legend{top:52px;font-size:13px}
+    #pauseBadge{left:12px;transform:none;top:14px}
   }
 </style>
 <script type="importmap">
@@ -69,133 +93,86 @@
 <body>
 <div id="app">
   <div id="panel">
-    <h1>Fizzik</h1>
-    <div class="sub">Рисовалка с физикой в 3D · «Rock-Parametric»</div>
+    <div id="sheetHead"><b>Настройки</b><button id="sheetClose" class="ico" title="Закрыть">✕</button></div>
+    <header class="head">
+      <div><h1>Fizzik</h1><div class="sub">«Rock-Parametric»</div></div>
+      <i class="tip" data-tip="Рисовалка с физикой в 3D. Нарисованное сразу падает и держит форму. Пауза (пробел) — всё замирает, можно спокойно строить. Ctrl+Z / Ctrl+Y — назад и вперёд, Delete — удалить выбранное, G — привязка к сетке.">i</i>
+    </header>
 
-    <div id="sheetHead"><b>Fizzik · настройки</b><button id="sheetClose">Закрыть ✕</button></div>
-    <div class="row pauseRow" style="margin-bottom:10px">
-      <button id="pause" style="flex:3" title="Пробел">⏸ Пауза</button>
-      <button id="stepBtn" disabled title="Один кадр расчёта (на паузе)">Шаг</button>
+    <div class="row pauseRow">
+      <button id="pause" class="wide" title="Пауза (пробел)">⏸ Пауза</button>
+      <button id="stepBtn" class="ico" disabled title="Один кадр расчёта (на паузе)">⏭</button>
+      <button id="undo" class="ico" title="Назад (Ctrl+Z)">↶</button>
+      <button id="redo" class="ico" title="Вперёд (Ctrl+Y)">↷</button>
     </div>
-    <div class="note pauseNote" style="margin:-4px 0 10px">Пауза (пробел) замораживает расчёт: рисуйте, назначайте силы, двигайте точки. Потом «Продолжить».</div>
 
-    <fieldset class="tools"><legend>Инструмент</legend>
-      <div class="row" id="tools">
+    <section class="tools">
+      <div class="grid3" id="tools">
         <button data-tool="draw" class="on">Рисовать</button>
         <button data-tool="point">Точка</button>
         <button data-tool="connect">Соединить</button>
-        <button data-tool="anchor">Якорь</button>
         <button data-tool="select">Выбрать</button>
         <button data-tool="pull">Тянуть</button>
-        <button data-tool="erase">Стереть</button>
-        <button data-tool="angle">Угол</button>
         <button data-tool="view">Камера</button>
+        <button data-tool="anchor">Якорь</button>
+        <button data-tool="angle">Угол</button>
+        <button data-tool="erase">Стереть</button>
       </div>
-    </fieldset>
+    </section>
 
-    <fieldset><legend>Новые фигуры</legend>
-      <div class="chk"><input type="checkbox" id="autoLoad" checked> <label for="autoLoad">Сразу с гравитацией (падают вниз)</label></div>
-      <div class="chk" style="margin-top:4px"><input type="checkbox" id="autoAngle" checked> <label for="autoAngle">Фиксировать углы автоматически</label></div>
-    </fieldset>
-
-    <fieldset><legend>Сетка</legend>
-      <div class="chk"><input type="checkbox" id="snap" checked> <label for="snap">Привязка к 3D-сетке (G)</label></div>
-      <label class="sl" style="margin-top:6px">Шаг сетки
-        <select id="snapStep" style="float:right">
+    <section>
+      <h2>Рисование <i class="tip" data-tip="Новые фигуры сразу получают гравитацию и жёсткие углы — можно выключить. Плоскость: «Вид» — перпендикулярно взгляду, как на экране; XY / XZ / YZ — строго в плоскости осей. Плоскость проходит через центр обзора и не меняется, пока тянете штрих. Привязка ставит точки и гизмо в узлы 3D-сетки.">i</i></h2>
+      <label class="chk"><input type="checkbox" id="autoLoad" checked> Гравитация</label>
+      <label class="chk"><input type="checkbox" id="autoAngle" checked> Жёсткие углы</label>
+      <div class="chk"><label><input type="checkbox" id="snap"> Сетка</label>
+        <select id="snapStep" title="Шаг сетки">
           <option value="0.1">0.1 м</option>
           <option value="0.25">0.25 м</option>
           <option value="0.5" selected>0.5 м</option>
           <option value="1">1 м</option>
-        </select></label>
-      <div style="clear:both"></div>
-      <div class="note">Точки, рисование и гизмо встают в узлы сетки. Сетка видна на плоскости рисования.</div>
-    </fieldset>
-
-    <fieldset><legend>Плоскость рисования</legend>
-      <div class="row" id="planes">
-        <button data-plane="VIEW" class="on" title="перпендикулярно взгляду">Вид</button>
+        </select></div>
+      <div class="seg" id="planes">
+        <button data-plane="VIEW" class="on" title="Перпендикулярно взгляду">Вид</button>
         <button data-plane="XY">XY</button>
         <button data-plane="XZ">XZ</button>
         <button data-plane="YZ">YZ</button>
       </div>
-      <div class="note">Для «Рисовать» и «Точка». По умолчанию «Вид»: плоскость перпендикулярна взгляду, рисуете как на экране. XY / XZ / YZ — по желанию, чтобы рисовать строго в плоскости осей. Плоскость проходит через центр обзора (точку, вокруг которой вращается камера); пока тянете штрих, она не меняется.</div>
-    </fieldset>
+    </section>
 
-    <fieldset><legend>Нагрузка</legend>
-      <div class="row" id="dirs">
-        <button data-d="0,-1,0" title="вниз (−Y), гравитация">↓ вниз</button>
-        <button data-d="0,1,0" title="вверх (+Y)">↑ вверх</button>
+    <section>
+      <h2>Нагрузка <i class="tip" data-tip="Вектор силы для выбранных точек (если ничего не выбрано — для всех). Направление — кнопкой, сила — ползунком от 0 до 2. «×» снимает нагрузку. Точки с нагрузкой синие.">i</i></h2>
+      <div class="seg" id="dirs">
+        <button data-d="0,-1,0" title="Вниз (гравитация)">↓</button>
+        <button data-d="0,1,0" title="Вверх">↑</button>
         <button data-d="-1,0,0" title="−X">−X</button>
         <button data-d="1,0,0" title="+X">+X</button>
         <button data-d="0,0,-1" title="−Z">−Z</button>
         <button data-d="0,0,1" title="+Z">+Z</button>
+        <button id="loadOff" title="Снять нагрузку">✕</button>
       </div>
-      <label class="sl">Сила <b id="loadVal">1.00</b>
-        <input type="range" id="load" min="0" max="2" step="0.05" value="1"></label>
-      <div class="row" style="margin-top:6px"><button id="loadOff">Снять нагрузку</button></div>
-      <div class="note">Нарисованное стоит на месте. Выберите точки (инструмент «Выбрать») и нажмите направление — они начнут двигаться. Если ничего не выбрано, нагрузка назначается всем. Точки с нагрузкой синие.</div>
-    </fieldset>
+      <label class="sl"><span>Сила</span><input type="range" id="load" min="0" max="2" step="0.05" value="1"><b id="loadVal">1.00</b></label>
+    </section>
 
-    <fieldset><legend>Якорь</legend>
-      <div class="row">
-        <button id="anchorOn">Закрепить выбранные</button>
-        <button id="anchorOff">Отпустить</button>
-      </div>
-      <div class="note">Выделите точки рамкой (инструмент «Выбрать», тянуть по пустому месту) и закрепите все сразу.</div>
-    </fieldset>
+    <section>
+      <h2>Связи <i class="tip" data-tip="Якорь закрепляет выбранные точки (рамка в «Выбрать»). Одна закреплённая точка у жёсткой фигуры работает как шарнир. Длина: 0 — как нарисовано, 1 — вдвое длиннее, −1 — вдвое короче (выбранные линии или все); изменённые линии зелёные. Угол: фиксирует углы в выбранных точках; пружинность 0 — жёсткое тело, больше — угол поддаётся. Точки с углом и без нагрузки фиолетовые.">i</i></h2>
+      <div class="row2"><span class="lbl">Якорь</span><button id="anchorOn" title="Закрепить выбранные">Закрепить</button><button id="anchorOff" title="Отпустить выбранные">Отпустить</button></div>
+      <div class="row2"><span class="lbl">Угол</span><button id="angleOn" title="Зафиксировать углы в выбранных точках">Зафикс.</button><button id="angleOff" title="Снять фиксацию">Снять</button></div>
+      <label class="sl"><span>Длина</span><input type="range" id="spring" min="-1" max="1" step="0.05" value="0"><b id="springVal">0.00</b></label>
+      <label class="sl"><span>Пружин.</span><input type="range" id="angleSoft" min="0" max="1" step="0.05" value="0"><b id="angleSoftVal">0.00</b></label>
+    </section>
 
-    <fieldset><legend>Пружина</legend>
-      <label class="sl">Длина линии <b id="springVal">0.00</b>
-        <input type="range" id="spring" min="-1" max="1" step="0.05" value="0"></label>
-      <div class="note">0 — как нарисовано, 1 — вдвое длиннее, −1 — вдвое короче. Действует на выбранные линии; если ничего не выбрано — на все.</div>
-    </fieldset>
+    <section>
+      <h2>Сцена <i class="tip" data-tip="Пол есть всегда. Потолок на высоте 3 м. Предмет — параллелепипед, его двигают гизмо (инструмент «Выбрать»). Камера: правая кнопка — вращать, колесо — приблизить, средняя — сдвинуть; на телефоне — двумя пальцами или инструментом «Камера».">i</i></h2>
+      <div class="row2"><label class="chk"><input type="checkbox" id="ceil"> Потолок</label><button id="addBox">+ Предмет</button></div>
+      <div class="seg"><button id="vFront">Спереди</button><button id="vTop">Сверху</button><button id="vReset">Сброс</button></div>
+    </section>
 
-    <fieldset><legend>Угол</legend>
-      <div class="row">
-        <button id="angleOn">Зафиксировать</button>
-        <button id="angleOff">Снять</button>
-      </div>
-      <label class="sl" style="margin-top:6px">Пружинность угла <b id="angleSoftVal">0.00</b>
-        <input type="range" id="angleSoft" min="0" max="1" step="0.05" value="0"></label>
-      <div class="note">В выбранных точках сохраняются углы между всеми линиями, которые в них сходятся. Куб из 12 линий: выделите рамкой все 8 углов и нажмите «Зафиксировать» — куб держит форму. Если ничего не выбрано — действует на все точки. Точки с углом фиолетовые. Пружинность 0 — угол жёсткий: всё, что связано такими углами, двигается как одно твёрдое тело. Больше 0 — угол поддаётся и пружинит обратно.</div>
-    </fieldset>
-
-    <fieldset><legend>Коллизия</legend>
-      <div class="chk"><input type="checkbox" checked disabled> <span>Пол (всегда)</span></div>
-      <div class="chk"><input type="checkbox" id="ceil"> <span>Потолок (3 м)</span></div>
-      <div class="row" style="margin-top:6px"><button id="addBox">+ Предмет</button></div>
-      <div class="note">Предмет — параллелепипед. Двигается гизмо: выберите его инструментом «Выбрать».</div>
-    </fieldset>
-
-    <fieldset><legend>История</legend>
-      <div class="row">
-        <button id="undo" title="Ctrl+Z">↶ Назад</button>
-        <button id="redo" title="Ctrl+Y">↷ Вперёд</button>
-      </div>
-      <div class="row" style="margin-top:6px">
-        <button id="clear">Очистить</button>
-      </div>
-    </fieldset>
-
-    <fieldset><legend>Вид</legend>
-      <div class="row">
-        <button id="vFront">Спереди</button>
-        <button id="vTop">Сверху</button>
-        <button id="vReset">Сброс</button>
-      </div>
-      <div class="note">Мышь: правая кнопка — вращать, колесо — приблизить, средняя — сдвинуть. Телефон: двумя пальцами — вращать и приблизить, инструмент «Камера» — вращать одним пальцем.</div>
-    </fieldset>
-
-    <fieldset><legend>Выгрузка</legend>
-      <div class="row">
-        <button id="expJson">JSON</button>
-        <button id="expObj">OBJ</button>
-        <button id="expPng">PNG</button>
-      </div>
-      <div class="row" style="margin-top:6px"><button id="openJson">Открыть JSON…</button></div>
+    <section>
+      <h2>Файл <i class="tip" data-tip="JSON — вся работа, чтобы открыть и продолжить. OBJ — линии и точки в текущем положении (1 = 1 м, ось Y вверх). PNG — картинка сцены.">i</i></h2>
+      <div class="seg"><button id="expJson">JSON</button><button id="expObj">OBJ</button><button id="expPng">PNG</button></div>
+      <div class="seg"><button id="openJson">Открыть…</button><button id="clear">Очистить</button></div>
       <input type="file" id="file" accept=".json,application/json" hidden>
-      <div class="note">JSON хранит всё, чтобы продолжить работу. OBJ и PNG — текущий вид (после провисания).</div>
-    </fieldset>
+    </section>
   </div>
   <div id="mbar">
     <button id="mPause" class="ico" title="Пауза">⏸</button>
@@ -213,15 +190,15 @@
     </div>
     <button id="mMore" class="ico" title="Настройки и силы">☰</button>
   </div>
-  <div id="stage"><canvas id="c"></canvas><div id="frame"></div><div id="pauseBadge">ПАУЗА · расчёт стоит, можно рисовать и менять силы</div><div id="hint"></div><button id="legBtn" title="Что значат цвета">?</button>
+  <div id="stage"><canvas id="c"></canvas><div id="frame"></div><div id="pauseBadge">⏸ пауза</div><div id="hint"></div><button id="legBtn" title="Что значат цвета">?</button>
     <div id="legend">
       <div><i style="background:#2b6cb0"></i>точка с нагрузкой (падает)</div>
       <div><i style="background:#4a463d"></i>точка без сил (стоит)</div>
       <div><i style="background:#7b3fa0"></i>угол зафиксирован, нагрузки нет</div>
       <div><i class="sq" style="background:#c8421f"></i>якорь</div>
       <div><i style="background:#2f9e44"></i>пружина (линия изменена)</div>
-      <div style="font-size:11px;margin-top:2px">Несколько сил в узле — маленькие метки рядом</div>
-      <div><i style="background:#e08a00"></i>выбрано</div>
+      <div class="small">якорь или пружина вместе с другой силой — маленькие метки рядом</div>
+      <div><i style="background:#ff5a2b"></i>выбрано</div>
     </div></div>
 </div>
 
@@ -236,7 +213,7 @@ const hintEl = document.getElementById('hint');
 
 /* ---------- сцена ---------- */
 const renderer = new THREE.WebGLRenderer({ canvas: cv, antialias: true, preserveDrawingBuffer: true });
-renderer.setClearColor(0xfbfaf6);
+renderer.setClearColor(0xf6f7fa);
 const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(50, 1, 0.05, 300);
 const HOME = { pos: new THREE.Vector3(4, 2.6, 6.5), target: new THREE.Vector3(0, 1.2, 0) };
@@ -263,16 +240,16 @@ function resize() {
 new ResizeObserver(resize).observe(stage);
 resize();
 
-scene.add(new THREE.HemisphereLight(0xffffff, 0xd8d0bc, 1.1));
+scene.add(new THREE.HemisphereLight(0xffffff, 0xcfd5e2, 1.15));
 const sun = new THREE.DirectionalLight(0xffffff, 1.3); sun.position.set(3, 6, 4); scene.add(sun);
 
 const CEIL = 3;       // высота потолка, м
 const HALF = 20;      // половина стороны пола, м (стены по краю)
 
 const floor = new THREE.Mesh(new THREE.PlaneGeometry(HALF * 2, HALF * 2).rotateX(-Math.PI / 2),
-  new THREE.MeshBasicMaterial({ color: 0xe6dfcd }));
+  new THREE.MeshBasicMaterial({ color: 0xe6eaf0 }));
 floor.position.y = -0.002; scene.add(floor);
-const grid = new THREE.GridHelper(HALF * 2, HALF * 2, 0x8a8472, 0xcfc8b4);
+const grid = new THREE.GridHelper(HALF * 2, HALF * 2, 0xb8c0cd, 0xd3d9e2);
 grid.position.y = 0.001; scene.add(grid);
 const ceilMesh = new THREE.Mesh(new THREE.PlaneGeometry(HALF * 2, HALF * 2).rotateX(Math.PI / 2),
   new THREE.MeshBasicMaterial({ color: 0x1d1b17, transparent: true, opacity: 0.06, side: THREE.DoubleSide }));
@@ -288,14 +265,14 @@ let gridHelper = null;
 function rebuildGrid() {
   if (gridHelper) { scene.remove(gridHelper); gridHelper.geometry.dispose(); gridHelper.material.dispose(); }
   const size = 8;
-  gridHelper = new THREE.GridHelper(size, Math.round(size / snapStep), 0xc8421f, 0xe2a99a);
-  gridHelper.material.transparent = true; gridHelper.material.opacity = 0.45;
+  gridHelper = new THREE.GridHelper(size, Math.round(size / snapStep), 0xff5a2b, 0xffb59d);
+  gridHelper.material.transparent = true; gridHelper.material.opacity = 0.5;
   gridHelper.material.depthWrite = false;
   scene.add(gridHelper);
 }
 const rubber = new THREE.Line(
   new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3()]),
-  new THREE.LineBasicMaterial({ color: 0xc8421f }));
+  new THREE.LineBasicMaterial({ color: 0xff5a2b }));
 rubber.frustumCulled = false; rubber.visible = false; scene.add(rubber);
 
 // стрелка нагрузки
@@ -317,7 +294,7 @@ let pullIdx = -1;
 let frame = null;         // рамка выделения {x0,y0,x1,y1,shift}
 let connectFrom = -1;     // «Соединить»: первая выбранная точка
 let autoAngle = true, autoLoad = true;   // новые точки сразу получают нагрузку вниз   // «Рисовать» и «Соединить» сразу фиксируют углы
-let snapOn = true, snapStep = 0.5;   // привязка к 3D-сетке
+let snapOn = false, snapStep = 0.5;   // привязка к 3D-сетке
 const pullTarget = new THREE.Vector3();
 let pullPlane = null;
 let tcDragging = false;
@@ -337,7 +314,7 @@ for (const m of [pointMesh, anchorMesh, linkMesh, markMesh]) {
   m.frustumCulled = false; m.count = 0; scene.add(m);
 }
 const C = { point: new THREE.Color(0x4a463d), loaded: new THREE.Color(0x2b6cb0), angle: new THREE.Color(0x7b3fa0), anchor: new THREE.Color(0xc8421f), link: new THREE.Color(0x1d1b17),
-  spring: new THREE.Color(0x2f9e44), sel: new THREE.Color(0xe08a00) };
+  spring: new THREE.Color(0x2f9e44), sel: new THREE.Color(0xff5a2b) };
 const _m = new THREE.Matrix4(), _q = new THREE.Quaternion(), _p = new THREE.Vector3(),
   _s = new THREE.Vector3(), _d = new THREE.Vector3(), _up = new THREE.Vector3(0, 1, 0);
 
@@ -367,7 +344,8 @@ function updateVisuals() {
     if (p.f && p.f.s > 0) fs.push(C.loaded);
     if (angV.has(i)) fs.push(C.angle);
     if (sprV.has(i)) fs.push(C.spring);
-    if (fs.length < 2) return;
+    // нагрузка + угол — обычное состояние нарисованного, его не помечаем
+    if (fs.length < 2 || !(p.a || sprV.has(i))) return;
     const d = p.a ? 0.11 : 0.07;
     fs.forEach((c, k) => {
       const t = Math.PI * 0.75 - k * Math.PI / 2.6;   // сверху слева по часовой
@@ -405,7 +383,7 @@ function rebuildBoxes() {
   for (const m of boxMeshes) { scene.remove(m); m.traverse(o => { if (o.geometry) o.geometry.dispose(); }); }
   boxMeshes = S.boxes.map((b, i) => {
     const mesh = new THREE.Mesh(new THREE.BoxGeometry(b.w, b.h, b.d),
-      new THREE.MeshStandardMaterial({ color: 0xd3cbb5, roughness: 0.8 }));
+      new THREE.MeshStandardMaterial({ color: 0xd4dae6, roughness: 0.8 }));
     mesh.add(new THREE.LineSegments(new THREE.EdgesGeometry(mesh.geometry), new THREE.LineBasicMaterial({ color: 0x1d1b17 })));
     mesh.userData.i = i;
     mesh.position.set(b.x, b.y, b.z);
@@ -977,7 +955,32 @@ function setTool(t) {
   hintEl.classList.remove('gone'); clearTimeout(hintTimer);
   if (isPhone()) hintTimer = setTimeout(() => hintEl.classList.add('gone'), 4000);
 }
-document.querySelectorAll('[data-tool]').forEach(b => b.addEventListener('click', () => setTool(b.dataset.tool)));
+document.querySelectorAll('[data-tool]').forEach(b => { b.title = hints[b.dataset.tool] || ''; b.addEventListener('click', () => setTool(b.dataset.tool)); });
+// подсказки «i»: при наведении или по нажатию, без висящих табличек
+const tipBox = document.createElement('div'); tipBox.id = 'tipBox'; document.body.appendChild(tipBox);
+let tipOpen = null;
+function showTip(el) {
+  tipBox.textContent = el.dataset.tip; tipBox.classList.add('show');
+  const r = el.getBoundingClientRect(), w = tipBox.offsetWidth, h = tipBox.offsetHeight;
+  let x = r.right + 8, y = r.top - 4;
+  if (x + w > innerWidth - 8) x = Math.max(8, r.left + r.width / 2 - w / 2);
+  if (x + w > innerWidth - 8) x = innerWidth - 8 - w;
+  if (x !== r.right + 8) y = r.bottom + 6;
+  if (y + h > innerHeight - 8) y = Math.max(8, r.top - h - 6);
+  tipBox.style.left = x + 'px'; tipBox.style.top = y + 'px';
+}
+function hideTip() { tipBox.classList.remove('show'); if (tipOpen) tipOpen.classList.remove('open'); tipOpen = null; }
+document.querySelectorAll('i.tip').forEach(el => {
+  el.addEventListener('mouseenter', () => { if (!tipOpen) showTip(el); });
+  el.addEventListener('mouseleave', () => { if (!tipOpen) tipBox.classList.remove('show'); });
+  el.addEventListener('click', ev => {
+    ev.stopPropagation();
+    if (tipOpen === el) { hideTip(); return; }
+    hideTip(); tipOpen = el; el.classList.add('open'); showTip(el);
+  });
+});
+document.addEventListener('click', () => { if (tipOpen) hideTip(); });
+document.getElementById('panel').addEventListener('scroll', hideTip);
 // телефон: шторка с настройками, подсказка цветов, пауза и «назад» в нижней строке
 document.getElementById('mMore').addEventListener('click', () => document.body.classList.toggle('sheet'));
 document.getElementById('sheetClose').addEventListener('click', () => document.body.classList.remove('sheet'));
@@ -1009,7 +1012,7 @@ const ceilEl = document.getElementById('ceil');
 
 // кому назначается нагрузка: выбранным точкам, а если ничего не выбрано — всем
 function loadTargets() { return sel.points.size ? [...sel.points].map(i => S.points[i]).filter(Boolean) : S.points; }
-document.querySelectorAll('#dirs button').forEach(b => b.addEventListener('click', () => {
+document.querySelectorAll('#dirs button[data-d]').forEach(b => b.addEventListener('click', () => {
   const [x, y, z] = b.dataset.d.split(',').map(Number);
   loadTargets().forEach(p => { if (!p.a) p.f = { dx: x, dy: y, dz: z, s: loadStrength }; });
   syncLoad(); pushHist();
@@ -1028,7 +1031,7 @@ function syncLoad() {
   const first = loadTargets().find(p => p.f);
   if (first && sel.points.size) loadStrength = first.f.s;
   loadEl.value = loadStrength; loadVal.textContent = (+loadStrength).toFixed(2);
-  document.querySelectorAll('#dirs button').forEach(b => {
+  document.querySelectorAll('#dirs button[data-d]').forEach(b => {
     const [x, y, z] = b.dataset.d.split(',').map(Number);
     b.classList.toggle('on', !!first && sel.points.size > 0 && first.f.dx === x && first.f.dy === y && first.f.dz === z);
   });
@@ -1179,8 +1182,8 @@ function tick() {
   syncBoxes();
   // плоскость рисования и стрелка нагрузки
   const onPlane = tool === 'draw' || tool === 'point' || tool === 'connect';
-  guide.visible = onPlane;
-  gridHelper.visible = onPlane && snapOn;
+  guide.visible = false;   // заливку плоскости не показываем — только сетку
+  gridHelper.visible = onPlane && (snapOn || (drawing ? drawing.planeName : plane) !== 'VIEW');
   if (onPlane) {
     const n = planeNormal(drawing ? drawing.planeName : plane);
     planeCenter(guide.position);
